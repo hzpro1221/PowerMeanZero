@@ -19,16 +19,6 @@ public:
     // Default destructor
     ~Node() = default;
 
-    // Get v_value of the node
-    float get_v_value() const {
-        return v_value;
-    }
-
-    // Get q_value of the node
-    float get_q_value() const {
-        return q_value;
-    }
-
     // Update visit count
     void update_visit_count() {
         visit_count++;
