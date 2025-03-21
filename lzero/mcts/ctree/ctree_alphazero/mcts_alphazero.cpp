@@ -197,8 +197,6 @@ private:
             state_config_for_env_reset["katago_policy_init"].cast<bool>(),
             katago_game_state
         );
-        
-
 
         // Expand the root node
         // _expand_leaf_node(root, simulate_env, policy_value_func);
@@ -213,7 +211,7 @@ private:
         }
 
         // Run MCTS simulations
-        for (int n = 0; n < num_simulations; ++n) {
+        for (int n = 1; n < num_simulations; ++n) {
             py::print("num_simulation: " + std::to_string(n));
             simulate_env.attr("reset")(
                 state_config_for_env_reset["start_player_index"].cast<int>(),
@@ -261,36 +259,49 @@ private:
 
     // Stimulate Q-value
     float _stimulateQ(std::shared_ptr<Node> node, int action, py::object simulate_env, py::object policy_value_func) {
+        py::print("\t--------------------STIMULATE_Q--------------------");
         float v_next;
         
         // Apply action to environment to get to next state 
-        simulate_env.attr("step")(action);        
+        simulate_env.attr("step")(action);
+
+        int new_action;
+        std::shared_ptr<Node> child;
+
+        // Select next action
+        std::tie(new_action, child) = _select_child(node, simulate_env);
 
         // Get reward
         double leaf_value;
         leaf_value = std::get<2>(_check_game_result(simulate_env));
 
         if (leaf_value == -1.0) {
-            if (node->is_leaf()) {
-                leaf_value = _expand_leaf_node(node, simulate_env, policy_value_func);
+            if (child->is_leaf()) {
+                leaf_value = _expand_leaf_node(child, simulate_env, policy_value_func);
+                child->v_value = leaf_value; 
+                child->visit_count++;
+
                 v_next = leaf_value;
+                py::print("\tGame is not over, child is leaf - v_next:", v_next);
             } else {
-                std::tie(leaf_value, v_next) = _simulate(node, simulate_env, policy_value_func);
+                py::print("\tGame is not over, not is leaf - v_next:", v_next);
+                std::tie(leaf_value, v_next) = _simulate(child, simulate_env, policy_value_func);
             }
         }
         else {
-            // What if s_(h+1) is terminal state? Then what is the V_(h+1) value?
+            py::print("\tGame is over - V_next:", v_next);
             v_next = leaf_value;
         }
-
         node->q_value = (node->q_value + leaf_value + gamma * v_next) / (node->visit_count + 1);
+        py::print("\tQ_value update:", node->q_value);
         node->visit_count++;
-
+        py::print("\t--------------------END STIMULATE_Q--------------------");
         return leaf_value;
     }
 
     // Simulate a game starting from a given node
     std::pair<float, float> _simulate(std::shared_ptr<Node> node, py::object simulate_env, py::object policy_value_func) {
+        py::print("\t--------------------STIMULATE_V--------------------");
         int action;
         float leaf_value;
     
@@ -299,7 +310,7 @@ private:
         // Select next action
         std::tie(action, child) = _select_child(node, simulate_env);
         py::print("\t_stimulate - action selected: " + std::to_string(action));
-        py::print("\t_stimulate - child_selected.is_leaf ?: " + std::to_string(child->is_leaf()));
+        py::print("\t_stimulate - child_selected.is_leaf: " + std::to_string(child->is_leaf()));
         // If there is no action valid, then V_value as return value from roll-out policy
         if (action == -1) {
             leaf_value = std::get<2>(_check_game_result(simulate_env));
@@ -308,12 +319,16 @@ private:
                 if (node->is_leaf()) {
                     leaf_value = _expand_leaf_node(node, simulate_env, policy_value_func);
                     node->v_value = leaf_value;
+                    py::print("\t_stimulate - game is not over - updated v_value:", leaf_value);
                     node->visit_count++;
+                    py::print("\t--------------------END STIMULATE_V--------------------");                    
                     return std::make_pair(leaf_value, node->v_value);
                 }
             } else {
                 node->v_value = leaf_value;
+                py::print("\t_stimulate - game is over - updated v_value:", leaf_value);
                 node->visit_count++;
+                py::print("\t--------------------END STIMULATE_V--------------------");                    
                 return std::make_pair(leaf_value, node->v_value);
             }
         } else {
@@ -326,12 +341,13 @@ private:
         for (const auto& kv : node->children) {
             int action_tmp = kv.first;
             std::shared_ptr<Node> child_tmp = kv.second;
-            
+
             v_new += pow(child_tmp->q_value, p) * (child_tmp->visit_count / node->visit_count);
+            py::print("\tFor action", action_tmp, "- child visit:", child_tmp->visit_count, "- parent visit:", node->visit_count,"- v_new is:", v_new);
         }
         node->visit_count++;
         node->v_value = pow(v_new, 1/p);
-
+        py::print("\t_stimulate - updated v_value:", node->v_value);
         // Swap score for h - 1 depth if this game is "sel_play_mode"
         std::string battle_mode = simulate_env.attr("battle_mode_in_simulation_env").cast<std::string>();
         if (battle_mode == "self_play_mode") {
@@ -339,6 +355,7 @@ private:
         } else if (battle_mode == "play_with_bot_mode") {
             leaf_value = leaf_value;
         }
+        py::print("\t--------------------END STIMULATE_V--------------------");                    
         return std::make_pair(leaf_value, node->v_value);
     }
 
