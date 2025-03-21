@@ -9,9 +9,6 @@ PYBIND11_MODULE(node_alphazero, m) {
         .def(py::init([](std::shared_ptr<Node> parent, float prior_p){
             return std::make_shared<Node>(parent, prior_p);
         }), py::arg("parent")=nullptr, py::arg("prior_p")=1.0)
-        // .def_property_readonly("value", &Node::get_value)
-        // .def("update", &Node::update)
-        // .def("update_recursive", &Node::update_recursive)
         .def("is_leaf", &Node::is_leaf)
         .def("is_root", &Node::is_root)
         .def("parent", [](const Node& self) -> std::shared_ptr<Node> {
@@ -21,13 +18,7 @@ PYBIND11_MODULE(node_alphazero, m) {
             return self.children;
         })
         .def("add_child", &Node::add_child)
-        .def("update_Q_value", &Node::update_Q_value)
-        .def("get_q_value", &Node::get_q_value)
-        .def("get_visit_count", &Node::get_visit_count)
-        .def("update_visit_count", &Node::update_visit_count)
-        .def("get_v_value", &Node::get_v_value)
-        // .def("get_value", &Node::get_value)
-        .def_property_readonly("visit_count", &Node::get_visit_count)
+        .def_property_readonly("visit_count", [](const Node &n) { return n.visit_count; })
         .def_readwrite("prior_p", &Node::prior_p)
         .def("get_child", [](const Node &self, int action) -> std::shared_ptr<Node> {
         auto it = self.children.find(action);
