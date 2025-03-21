@@ -116,7 +116,7 @@ def mcts_fixture():
     """
     mcts = mcts_alphazero.MCTS(
         max_moves=100,  # Maximum number of moves
-        num_simulations=100,  # Number of simulations per search
+        num_simulations=50,  # Number of simulations per search
         pb_c_base=19652,  # Parameter for UCB score calculation
         pb_c_init=1.25,  # Initial value for UCB score calculation
         root_dirichlet_alpha=0.3,  # Dirichlet noise parameter for the root node
