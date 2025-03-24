@@ -33,7 +33,7 @@ private:
     MCTS(int max_moves=512, int num_simulations=800,
          double pb_c_base=19652, double pb_c_init=1.25,
          double root_dirichlet_alpha=0.3, double root_noise_weight=0.25, py::object simulate_env=py::none(),
-         double gamma=0.5, double p=1.5)
+         double gamma=0.5, double p=4)
         : max_moves(max_moves), num_simulations(num_simulations),
           pb_c_base(pb_c_base), pb_c_init(pb_c_init),
           root_dirichlet_alpha(root_dirichlet_alpha),
@@ -343,7 +343,13 @@ private:
             std::shared_ptr<Node> child_tmp = kv.second;
 
             node->value += pow(child_tmp->value, p) * ((double) child_tmp->visit_count / node->visit_count);
+            
+            py::print("\n\t------------------------------------------------------------------------");
+            py::print("\tElement of v_next caculation:");
             py::print("\tFor action", action_tmp, "- child q_value",child_tmp->value ,"- child visit:", child_tmp->visit_count, "- parent visit:", node->visit_count,"- v_new is:", node->value);
+            py::print("\tpow(child_tmp->value, p):", pow(child_tmp->value, p));
+            py::print("\t((double) child_tmp->visit_count / node->visit_count):", ((double) child_tmp->visit_count / node->visit_count));
+            py::print("\t------------------------------------------------------------------------\n");
         }
         node->value = pow(node->value, 1/p);
         py::print("\t_stimulate - updated v_value:", node->value);
