@@ -153,6 +153,7 @@ private:
 
     // Expand a leaf node by adding its children based on policy probabilities
     float _expand_leaf_node(std::shared_ptr<Node> node, py::object simulate_env, py::object policy_value_func) {
+        py::print("\n\t---------------------------EXPAND_NODE---------------------------");
         std::map<int, double> action_probs_dict;
         double leaf_value;
 
@@ -160,6 +161,7 @@ private:
         py::tuple result = policy_value_func(simulate_env);
         action_probs_dict = result[0].cast<std::map<int, double>>();
         leaf_value = result[1].cast<float>();
+        py::print("\t\tLeaf_value from value_function is:", leaf_value);
 
         // Get the legal actions from the simulation environment
         py::list legal_actions_list = simulate_env.attr("legal_actions").cast<py::list>();
@@ -174,7 +176,7 @@ private:
                 node->q_nodes[action] = std::make_shared<Node>(node, prior_p);
             }
         }
-
+        py::print("\t---------------------------END EXPAND_NODE---------------------------\n");
         return leaf_value;
     }
 
@@ -230,9 +232,11 @@ private:
         std::vector<std::pair<int, int>> action_visits;
         for (int action = 0; action < simulate_env.attr("action_space").attr("n").cast<int>(); ++action) {
             if (root->children.count(action)) {
+                py::print("is_child - action:", action, ", visit:", root->children[action]->visit_count);
                 action_visits.emplace_back(action, root->children[action]->visit_count);
             }
             else {
+                py::print("not_is_child - action:", action, ", visit:", 0);
                 action_visits.emplace_back(action, 0);
             }
         }
@@ -279,15 +283,18 @@ private:
                 node->visit_count++;
 
                 v_next = leaf_value;
-                py::print("\tGame is not over, child is leaf - v_next:", v_next);
+                py::print("\tGame is not over, child is leaf - v_next:", v_next, ", leaf_value", leaf_value);
             } else {
                 std::tie(leaf_value, v_next) = _simulate(node, simulate_env, policy_value_func);
-                py::print("\tGame is not over, not is leaf - v_next:", v_next);
+                py::print("\tGame is not over, not is leaf - v_next:", v_next, ", leaf_value", leaf_value);
             }
         }
         else {
-            py::print("\tGame is over - V_next:", v_next);
             v_next = leaf_value;
+            node->value = leaf_value; 
+            node->visit_count++;
+
+            py::print("\tGame is over - V_next:", v_next, ", leaf_value", leaf_value);
         }
 
         q_node->value = (q_node->value + leaf_value + gamma * v_next) / (q_node->visit_count + 1);
