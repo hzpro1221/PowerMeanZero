@@ -26,12 +26,5 @@ PYBIND11_MODULE(node_alphazero, m) {
             return nullptr;
         }
         return it->second;
-        })
-        .def("get_q_nodes", [](const Node &self, int action) -> std::shared_ptr<Node> {
-        auto it = self.q_nodes.find(action);
-        if (it == self.q_nodes.end()) {
-            return nullptr;
-        }
-        return it->second;
-    });
+        });
 }
