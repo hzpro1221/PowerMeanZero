@@ -13,7 +13,7 @@ public:
     std::map<int, std::shared_ptr<Node>> children;
 
     // Constructor
-    Node(std::shared_ptr<Node> parent = nullptr, double prior_p = 1.0)
+    Node(std::shared_ptr<Node> parent = nullptr, float prior_p = 1.0)
         : parent(parent), prior_p(prior_p), visit_count(0), value(0.0) {}
 
     // Default destructor
@@ -29,27 +29,9 @@ public:
         return parent == nullptr;
     }
 
-    // Add a child node 
-    void add_child(int action, std::shared_ptr<Node> node) {
-        children[action] = node;
-    }
-
-    // Get the visit count
-    int get_visit_count() const { return visit_count; }
-
-    // Get the parent node
-    std::shared_ptr<Node> get_parent() const {
-        return parent;
-    }
-
-    // Get the child nodes
-    const std::map<int, std::shared_ptr<Node>>& get_children() const {
-        return children;
-    }
-    
-    double prior_p;        // The prior probability of the node
+    float prior_p;        // The prior probability of the node
     int visit_count;      // Visit count
-    double value;      // value of the node 
+    float value;      // Value sum
 };
 
 #endif // NODE_ALPHAZERO_H
