@@ -47,7 +47,7 @@ class TicTacToeEnv(BaseEnv):
         # (str): The mode of the battle. Choices are 'self_play_mode' or 'alpha_beta_pruning'.
         battle_mode='self_play_mode',
         # (str): The mode of Monte Carlo Tree Search. This is only used in AlphaZero.
-        battle_mode_in_simulation_env='self_play_mode',
+        battle_mode_in_simulation_env='play_with_bot_mode',
         # (str): The type of action the bot should take. Choices are 'v0' or 'alpha_beta_pruning'.
         bot_action_type='v0',
         # (str): The folder path where replay video saved, if None, will not save replay video.
@@ -84,7 +84,7 @@ class TicTacToeEnv(BaseEnv):
         # The mode of interaction between the agent and the environment.
         assert self.battle_mode in ['self_play_mode', 'play_with_bot_mode', 'eval_mode']
         # The mode of MCTS is only used in AlphaZero.
-        self.battle_mode_in_simulation_env = 'self_play_mode'
+        self.battle_mode_in_simulation_env = 'play_with_bot_mode'
         self.board_size = 3
         self.players = [1, 2]
         self.total_num_actions = 9
@@ -229,7 +229,7 @@ class TicTacToeEnv(BaseEnv):
             # player 1 battle with expert player 2
 
             # player 1's turn
-            timestep_player1 = self._player_step(action)
+            timestep_player1 = self._player_step(action, player="policy")
             # self.env.render()
             if timestep_player1.done:
                 # NOTE: in play_with_bot_mode, we must set to_play as -1, because we don't consider the alternation between players.
@@ -240,7 +240,7 @@ class TicTacToeEnv(BaseEnv):
             # player 2's turn
             bot_action = self.bot_action()
             # print('player 2 (computer player): ' + self.action_to_string(bot_action))
-            timestep_player2 = self._player_step(bot_action)
+            timestep_player2 = self._player_step(bot_action, player="bot")
             # the eval_episode_return is calculated from Player 1's perspective
             timestep_player2.info['eval_episode_return'] = -timestep_player2.reward
             timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
@@ -257,7 +257,7 @@ class TicTacToeEnv(BaseEnv):
             # player 1's turn
             if self._replay_path is not None:
                 self._frames.append(self._env.render(mode='rgb_array'))
-            timestep_player1 = self._player_step(action)
+            timestep_player1 = self._player_step(action, "policy")
             # self.env.render()
             if timestep_player1.done:
                 # NOTE: in eval_mode, we must set to_play as -1, because we don't consider the alternation between players.
@@ -286,7 +286,7 @@ class TicTacToeEnv(BaseEnv):
             # print('player 2 (computer player): ' + self.action_to_string(bot_action))
             if self._replay_path is not None:
                 self._frames.append(self._env.render(mode='rgb_array'))
-            timestep_player2 = self._player_step(bot_action)
+            timestep_player2 = self._player_step(bot_action, "bot")
             if self._replay_path is not None:
                 self._frames.append(self._env.render(mode='rgb_array'))
             # the eval_episode_return is calculated from Player 1's perspective
@@ -313,16 +313,16 @@ class TicTacToeEnv(BaseEnv):
 
             return timestep
 
-    def _player_step(self, action):
+    def _player_step(self, action, player):
 
         if action in self.legal_actions:
             row, col = self.action_to_coord(action)
             self.board[row, col] = self.current_player
         else:
-            logging.warning(
-                f"You input illegal action: {action}, the legal_actions are {self.legal_actions}. "
-                f"Now we randomly choice a action from self.legal_actions."
-            )
+            # logging.warning(
+            #     f"PLAYER {player}!!, You input illegal action: {action}, the legal_actions are {self.legal_actions}. "
+            #     f"Now we randomly choice a action from self.legal_actions."
+            # )
             action = np.random.choice(self.legal_actions)
             row, col = self.action_to_coord(action)
             self.board[row, col] = self.current_player

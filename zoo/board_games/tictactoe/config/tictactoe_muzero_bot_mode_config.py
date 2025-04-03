@@ -19,6 +19,7 @@ tictactoe_muzero_config = dict(
     exp_name=f'data_muzero/tictactoe_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed0',
     env=dict(
         battle_mode='play_with_bot_mode',
+        battle_mode_in_simulation_env='play_with_bot_mode',
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
