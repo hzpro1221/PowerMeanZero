@@ -314,15 +314,15 @@ class TicTacToeEnv(BaseEnv):
             return timestep
 
     def _player_step(self, action, player):
-
+        print(f"Player {player} has played action {action}!")
         if action in self.legal_actions:
             row, col = self.action_to_coord(action)
             self.board[row, col] = self.current_player
         else:
-            # logging.warning(
-            #     f"PLAYER {player}!!, You input illegal action: {action}, the legal_actions are {self.legal_actions}. "
-            #     f"Now we randomly choice a action from self.legal_actions."
-            # )
+            logging.warning(
+                f"PLAYER {player}!!, You input illegal action: {action}, the legal_actions are {self.legal_actions}. "
+                f"Now we randomly choice a action from self.legal_actions."
+            )
             action = np.random.choice(self.legal_actions)
             row, col = self.action_to_coord(action)
             self.board[row, col] = self.current_player
