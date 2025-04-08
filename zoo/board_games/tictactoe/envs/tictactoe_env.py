@@ -314,7 +314,7 @@ class TicTacToeEnv(BaseEnv):
             return timestep
 
     def _player_step(self, action, player):
-        print(f"Player {player} has played action {action}!")
+        # print(f"Player {player} has played action {action}!")
         if action in self.legal_actions:
             row, col = self.action_to_coord(action)
             self.board[row, col] = self.current_player
