@@ -101,6 +101,7 @@ class TicTacToeEnv(BaseEnv):
         self.alphazero_mcts_ctree = self._cfg.alphazero_mcts_ctree
         self._replay_path = self._cfg.replay_path if hasattr(self._cfg, "replay_path") and self._cfg.replay_path is not None else None
         self._save_replay_count = 0
+        self.render_mode ='rgb_array'
 
     @property
     def legal_actions(self):
@@ -256,7 +257,7 @@ class TicTacToeEnv(BaseEnv):
 
             # player 1's turn
             if self._replay_path is not None:
-                self._frames.append(self._env.render(mode='rgb_array'))
+                self._frames.append(self._env.render())
             timestep_player1 = self._player_step(action, "policy")
             # self.env.render()
             if timestep_player1.done:
@@ -285,10 +286,10 @@ class TicTacToeEnv(BaseEnv):
                 bot_action = self.bot_action()
             # print('player 2 (computer player): ' + self.action_to_string(bot_action))
             if self._replay_path is not None:
-                self._frames.append(self._env.render(mode='rgb_array'))
+                self._frames.append(self._env.render())
             timestep_player2 = self._player_step(bot_action, "bot")
             if self._replay_path is not None:
-                self._frames.append(self._env.render(mode='rgb_array'))
+                self._frames.append(self._env.render())
             # the eval_episode_return is calculated from Player 1's perspective
             timestep_player2.info['eval_episode_return'] = -timestep_player2.reward
             timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
@@ -618,7 +619,7 @@ class TicTacToeEnv(BaseEnv):
 
         return new_board, new_legal_actions
 
-    def render(self, mode="human"):
+    def render(self):
         """
         Render the game state, either as a string (mode='human') or as an RGB image (mode='rgb_array').
 
@@ -634,9 +635,9 @@ class TicTacToeEnv(BaseEnv):
         Raises:
             ValueError: If the provided mode is unknown.
         """
-        if mode == 'human':
+        if self.render_mode == 'human':
             print(self.board)
-        elif mode == 'rgb_array':
+        elif self.render_mode == 'rgb_array':
             dpi = 80
             fig, ax = plt.subplots(figsize=(6, 6), dpi=dpi)
 
@@ -690,14 +691,17 @@ class TicTacToeEnv(BaseEnv):
             height = int(height)
 
             # Use the width and height values to reshape the numpy array
-            img = np.frombuffer(fig.canvas.tostring_rgb(), dtype='uint8')
+            img = np.frombuffer(fig.canvas.buffer_rgba(), dtype='uint8')
+            img = img.reshape(fig.canvas.get_width_height()[::-1] + (4,))
+            img = img[..., :3]
+
             img = img.reshape(height, width, 3)
 
             plt.close(fig)
 
             return img
         else:
-            raise ValueError(f"Unknown mode '{mode}', it should be either 'human' or 'rgb_array'.")
+            raise ValueError(f"Unknown mode '{self.render_mode}', it should be either 'human' or 'rgb_array'.")
 
     @staticmethod
     def display_frames_as_gif(frames: list, path: str) -> None:

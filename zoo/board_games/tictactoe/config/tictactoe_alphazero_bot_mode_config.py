@@ -1,4 +1,8 @@
 from easydict import EasyDict
+import wandb
+
+wandb.init(project="AlphaZero_TicTacToe", name="exp1")
+wandb.tensorboard.patch()
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
@@ -11,7 +15,6 @@ update_per_collect = 50
 batch_size = 256
 max_env_step = int(2e5)
 mcts_ctree = True
-
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
@@ -37,6 +40,7 @@ tictactoe_alphazero_config = dict(
         alphazero_mcts_ctree=mcts_ctree,
         save_replay_gif=False,
         replay_path_gif='./replay_gif',
+        replay_path='./replay'
         # ==============================================================
     ),
     policy=dict(
