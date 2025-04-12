@@ -259,13 +259,11 @@ class TicTacToeEnv(BaseEnv):
             # player 1 battle with expert player 2
 
             # player 1's turn
-            if self._replay_path is not None:
-                self._frames.append(self._env.render(prob=action["probs"], player="policy"))
             timestep_player1 = self._player_step(action["action"], "policy")
+            if self._replay_path is not None:
+                self._frames.append(self._env.render(prob=action["probs"], player="policy"))            
             # self.env.render()
             if timestep_player1.done:
-                self._frames.append(self._env.render(prob=action["probs"], player="policy"))
-
                 # NOTE: in eval_mode, we must set to_play as -1, because we don't consider the alternation between players.
                 # And the to_play is used in MCTS.
                 timestep_player1.obs['to_play'] = -1
@@ -289,8 +287,7 @@ class TicTacToeEnv(BaseEnv):
             else:
                 bot_action = self.bot_action()
             # print('player 2 (computer player): ' + self.action_to_string(bot_action))
-            if self._replay_path is not None:
-                self._frames.append(self._env.render(prob=None, player="bot"))
+
             timestep_player2 = self._player_step(bot_action, "bot")
             if self._replay_path is not None:
                 self._frames.append(self._env.render(prob=None, player="bot"))
@@ -305,7 +302,6 @@ class TicTacToeEnv(BaseEnv):
             timestep.obs['to_play'] = -1
 
             if timestep_player2.done:
-                self._frames.append(self._env.render(prob=None, player="bot"))
                 if self._replay_path is not None:
                     if not os.path.exists(self._replay_path):
                         os.makedirs(self._replay_path)
@@ -676,22 +672,31 @@ class TicTacToeEnv(BaseEnv):
                         if (player == "policy"):
                             ax.add_patch(patches.Rectangle(
                                             (j - 0.5, i - 0.5), 1, 1,
-                                            color='blue', alpha=prob[i*3 + j]
+                                            color='blue', alpha=prob[i*3 + j] 
                                         ))
                             ax.text(j, i, 'X', ha='center', va='center', color='black', fontsize=24)
-                            ax.text(j, i + 0.3, f"{prob[i*3 + j]:.2f}", ha='center', va='top', fontsize=10, color='black')
+                            ax.text(j, i + 0.3, f"{prob[i*3 + j]:.6f}", ha='center', va='top', fontsize=10, color='black')
                         elif (player == "bot"):
-                            ax.text(j, i, 'O', ha='center', va='center', color='white', fontsize=24)            
+                            ax.text(j, i, 'X', ha='center', va='center', color='black', fontsize=24)            
                     elif self.board[i, j] == 2:  # Player 2
                         if (player == "policy"):
                             ax.add_patch(patches.Rectangle(
                                             (j - 0.5, i - 0.5), 1, 1,
                                             color='blue', alpha=prob[i*3 + j]
                                         ))
-                            ax.text(j, i, 'X', ha='center', va='center', color='black', fontsize=24)
-                            ax.text(j, i + 0.3, f"{prob[i*3 + j]:.2f}", ha='center', va='top', fontsize=10, color='black')
+                            ax.text(j, i, 'O', ha='center', va='center', color='black', fontsize=24)
+                            ax.text(j, i + 0.3, f"{prob[i*3 + j]:.6f}", ha='center', va='top', fontsize=10, color='black')
                         elif (player == "bot"):
-                            ax.text(j, i, 'O', ha='center', va='center', color='white', fontsize=24)  
+                            ax.text(j, i, 'O', ha='center', va='center', color='black', fontsize=24)  
+                    else:
+                        if (player == "policy"):
+                            ax.add_patch(patches.Rectangle(
+                                            (j - 0.5, i - 0.5), 1, 1,
+                                            color='blue', alpha=prob[i*3 + j]
+                                        ))
+                            ax.text(j, i + 0.3, f"{prob[i*3 + j]:.6f}", ha='center', va='top', fontsize=10, color='black')
+                        elif (player == "bot"):
+                            pass 
 
             # Setup the axes
             ax.set_xticks(np.arange(0.5, self.board_size, 1))
