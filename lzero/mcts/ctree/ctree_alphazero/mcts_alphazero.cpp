@@ -27,12 +27,12 @@ private:
     float gamma = 0.99;             
     float p = 1.5;
 
-public:
+    public:
     // Constructor to initialize MCTS with optional parameters
     MCTS(int max_moves=512, int num_simulations=800,
          double pb_c_base=19652, double pb_c_init=3,
          double root_dirichlet_alpha=0.3, double root_noise_weight=0.25, py::object simulate_env=py::none(),
-         float gamma = 0.99, float p = 2, float c = 2)
+         float gamma = 0.99, float p = 2, float c = 1.25)
         : max_moves(max_moves), num_simulations(num_simulations),
           pb_c_base(pb_c_base), pb_c_init(pb_c_init),
           root_dirichlet_alpha(root_dirichlet_alpha),
@@ -349,7 +349,7 @@ public:
                 leaf_value = _expand_leaf_node(V_sh_plus_1, Q_sh_a, simulate_env, policy_value_func);
 
                 // Rescale leaf_value from [-1; 1] to [0; 1]
-                // leaf_value = std::max(0.0, (leaf_value + 1.0) / 2.0);                 
+                leaf_value = std::max(0.0, (leaf_value + 1.0) / 2.0);                 
 
                 V_sh_plus_1->value = leaf_value;
                 V_sh_plus_1->visit_count++;
@@ -357,7 +357,7 @@ public:
                 leaf_value = _simulateV(V_sh_plus_1, Q_sh_a, simulate_env, policy_value_func);
                 
                 // Rescale leaf_value from [-1; 1] to [0; 1]
-                // leaf_value = std::max(0.0, (leaf_value + 1.0) / 2.0);
+                leaf_value = std::max(0.0, (leaf_value + 1.0) / 2.0);
             }
             // py::print("\tleaf_value:", leaf_value, ", V_sh_plus_1->value:", V_sh_plus_1->value);
         } else {
@@ -376,7 +376,7 @@ public:
             }
             
             // Rescale leaf_value from [-1; 1] to [0; 1]
-            // leaf_value = std::max(0.0, (leaf_value + 1.0) / 2.0);  
+            leaf_value = std::max(0.0, (leaf_value + 1.0) / 2.0);  
             
             V_sh_plus_1->value = leaf_value;
             V_sh_plus_1->visit_count++;
