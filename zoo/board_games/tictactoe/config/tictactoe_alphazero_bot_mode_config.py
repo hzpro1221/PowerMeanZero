@@ -1,8 +1,8 @@
 from easydict import EasyDict
 import wandb
 
-wandb.login()
-wandb.init(project="AlphaZero_TicTacToe", name="test3", sync_tensorboard=True)
+# wandb.login()
+# wandb.init(project="AlphaZero_TicTacToe", name="test3", sync_tensorboard=True)
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user

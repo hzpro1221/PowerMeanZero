@@ -18,25 +18,28 @@ class MCTS {
 private:
     int max_moves;                  // Maximum allowed moves in a game
     int num_simulations;            // Number of MCTS simulations
-    double c;               // Coefficient for UCB exploration term (base)
+    double pb_c_base;               // Coefficient for UCB exploration term (base)
+    double pb_c_init;               // Coefficient for UCB exploration term (initial value)
     double root_dirichlet_alpha;    // Alpha parameter for Dirichlet noise
     double root_noise_weight;       // Weight for exploration noise added to root node
     py::object simulate_env;        // Python object representing the simulation environment
+    float c = 3.0;
     float gamma = 0.99;             
     float p = 1.5;
 
 public:
     // Constructor to initialize MCTS with optional parameters
     MCTS(int max_moves=512, int num_simulations=800,
-        double c = 3,
-        double root_dirichlet_alpha=0.3, double root_noise_weight=0.25, py::object simulate_env=py::none(),
-        float gamma = 0.99, 
-        float p = 2,
-        double c = 3)
+         double pb_c_base=19652, double pb_c_init=3,
+         double root_dirichlet_alpha=0.3, double root_noise_weight=0.25, py::object simulate_env=py::none(),
+         float gamma = 0.99, float p = 2, float c = 2)
         : max_moves(max_moves), num_simulations(num_simulations),
+          pb_c_base(pb_c_base), pb_c_init(pb_c_init),
           root_dirichlet_alpha(root_dirichlet_alpha),
           root_noise_weight(root_noise_weight),
-          gamma(gamma), p(p), c(c)
+          gamma(gamma),
+          p(p),
+          c(c),
           simulate_env(simulate_env) {}
 
     // Getter for the simulation environment (Python object)
@@ -57,18 +60,22 @@ public:
 
     // Calculate the Upper Confidence Bound (UCB) score for child nodes
     double _ucb_score(std::shared_ptr<Node> V_sh, std::shared_ptr<Node> Q_sh_a) {
-        py::print("\t\t\t------------------------------------_UCB_SCORE------------------------------------");
+        // py::print("\t\t\t------------------------------------_UCB_SCORE------------------------------------");
         // Calculate PB-C component of UCB
-        py::print("\t\t\tV_sh->visit_count:", V_sh->visit_count, "\n");
+        // double pb_c = std::log((V_sh->visit_count + pb_c_base + 1) / pb_c_base) + pb_c_init;
+        // pb_c *= std::sqrt(std::sqrt(V_sh->visit_count) / (Q_sh_a->visit_count));
 
-        py::print("\t\t\tQ_sh_a->visit_count:", Q_sh_a->visit_count);
-        py::print("\t\t\tQ_sh_a->prior_p:", Q_sh_a->prior_p);
-        py::print("\t\t\tQ_sh_a->value:", Q_sh_a->value);
+        // py::print("\t\t\tV_sh->visit_count:", V_sh->visit_count, "\n");
 
+        // py::print("\t\t\tQ_sh_a->visit_count:", Q_sh_a->visit_count);
+        // py::print("\t\t\tQ_sh_a->prior_p:", Q_sh_a->prior_p);
+        // py::print("\t\t\tQ_sh_a->value:", Q_sh_a->value);
+        // py::print("prior_p:", Q_sh_a->prior_p, "; Q_sh_a->prior_p * c", Q_sh_a->prior_p * c);
+        // Combine prior probability and value score
         double prior_score = Q_sh_a->prior_p * c * std::sqrt(std::sqrt(V_sh->visit_count) / (Q_sh_a->visit_count));
         double value_score = Q_sh_a->value;
-        py::print("\t\t\tUCB score:", prior_score + value_score);
-        py::print("\t\t\t----------------------------------------------------------------------------------");        
+        // py::print("\t\t\tUCB score:", prior_score + value_score);
+        // py::print("\t\t\t----------------------------------------------------------------------------------");        
         return prior_score + value_score;
     }
 
@@ -106,7 +113,7 @@ public:
 
     // Select the best child node based on UCB score
     std::tuple<int, std::shared_ptr<Node>, std::shared_ptr<Node>> _select_child(std::shared_ptr<Node> V_sh, std::shared_ptr<Node> Q_sh, py::object simulate_env, py::object policy_value_func) {
-        py::print("\t\t-----------------------------------------SELECT CHILD-----------------------------------------");
+        // py::print("\t\t-----------------------------------------SELECT CHILD-----------------------------------------");
         int action = -1;
         std::shared_ptr<Node> V_sh_plus_1 = nullptr;
         std::shared_ptr<Node> Q_sh_a = nullptr;
@@ -127,7 +134,7 @@ public:
 
             // Check if the action is legal and calculate UCB score
             if (std::find(legal_actions.begin(), legal_actions.end(), action_tmp) != legal_actions.end()) {
-                py::print("\t\tCACULATE UCB SCORE FOR ACTION:", action_tmp);
+                // py::print("\t\tCACULATE UCB SCORE FOR ACTION:", action_tmp);
                 double score = _ucb_score(V_sh, Q_sh_a_temp);
                 if (score > best_score) {
                     best_score = score;
@@ -163,20 +170,22 @@ public:
             V_sh_plus_1 = V_sh->children[action];
         }
         
-        py::print("\t\taction selected:", action, "- UCB score:", best_score);       
-        py::print("\t\t----------------------------------------------------------------------------------------------");        
+        // py::print("\t\taction selected:", action, "- UCB score:", best_score);       
+        // py::print("\t\t----------------------------------------------------------------------------------------------");        
         return std::make_tuple(action, V_sh_plus_1, Q_sh_a);
     }
 
     // Expand a leaf node by adding its children based on policy probabilities
     double _expand_leaf_node(std::shared_ptr<Node> V_sh, std::shared_ptr<Node> Q_sh, py::object simulate_env, py::object policy_value_func) {
-        py::print("\t\t--------------------------------------EXPAND LEAF--------------------------------------");
+        // py::print("\t\t--------------------------------------EXPAND LEAF--------------------------------------");
         std::map<int, double> action_probs_dict;
         double leaf_value;
 
         // Call the policy-value function to get action probabilities and leaf value
         py::tuple result = policy_value_func(simulate_env);
-        action_probs_dict = result[0].cast<std::map<int, double>>();
+        // py::print("original action_probs_dict:", result[0].cast<std::map<int, double>>(), 1);
+        action_probs_dict = softmax(result[0].cast<std::map<int, double>>(), 1);
+        
         leaf_value = result[1].cast<double>();
 
         // Get the legal actions from the simulation environment
@@ -184,19 +193,20 @@ public:
         // Temoral comment this line of code; For play_with_bot purpose
         std::vector<int> legal_actions = legal_actions_list.cast<std::vector<int>>();
 
-        py::print("extend Node:", legal_actions);
+        // py::print("extend Node:", legal_actions);
         // Add child nodes for legal actions
+        // py::print("action_probs_dict:", action_probs_dict);
         for (const auto& kv : action_probs_dict) {
             int action = kv.first;
             double prior_p = kv.second;
             if (std::find(legal_actions.begin(), legal_actions.end(), action) != legal_actions.end()) {
-                py::print("\t\tExpand action:", action, ", prior_p:", prior_p);
+                // py::print("\t\tExpand action:", action, ", prior_p:", prior_p);
                 V_sh->children[action] = std::make_shared<Node>(V_sh, prior_p);
                 Q_sh->children[action] = std::make_shared<Node>(Q_sh, prior_p);
             }
         }
-        py::print("\t\tLeaf value:", leaf_value);
-        py::print("\t\t---------------------------------------------------------------------------------");
+        // py::print("\t\tLeaf value:", leaf_value);
+        // py::print("\t\t---------------------------------------------------------------------------------");
         return leaf_value;
     }
 
@@ -222,13 +232,13 @@ public:
         );
 
         // Expand and update value for root node 
-        py::print("-----------------------------------INITIALIZE ROOT NODE-----------------------------------");
+        // py::print("-----------------------------------INITIALIZE ROOT NODE-----------------------------------");
         double leaf_value = _expand_leaf_node(V_root, Q_root, simulate_env, policy_value_func);
         V_root->visit_count++;
         V_root->value = leaf_value;
         Q_root->value = leaf_value + gamma * V_root->value;  
         Q_root->visit_count++;
-        py::print("-------------------------------------------------------------------------------------------");
+        // py::print("-------------------------------------------------------------------------------------------");
         if (sample) {
             _add_exploration_noise(V_root);
             _add_exploration_noise(Q_root);
@@ -236,7 +246,7 @@ public:
 
         // Run MCTS simulations
         for (int n = 1; n < num_simulations; ++n) {
-            py::print("-----------------------------------NUM STIMULATION:", n, "-----------------------------------"); 
+            // py::print("-----------------------------------NUM STIMULATION:", n, "-----------------------------------"); 
             simulate_env.attr("reset")(
                 state_config_for_env_reset["start_player_index"].cast<int>(),
                 init_state,
@@ -245,7 +255,7 @@ public:
             );
             simulate_env.attr("battle_mode") = simulate_env.attr("battle_mode_in_simulation_env");
             _simulateV(V_root, Q_root, simulate_env, policy_value_func);
-            py::print("-------------------------------------------------------------------------------------------");
+            // py::print("-------------------------------------------------------------------------------------------");
         }
 
         // Collect visit counts from the root's children
@@ -253,11 +263,11 @@ public:
         for (int action = 0; action < simulate_env.attr("action_space").attr("n").cast<int>(); ++action) {
             if (Q_root->children.count(action)) {
                 action_visits.emplace_back(action, Q_root->children[action]->visit_count);
-                py::print("Action:", action, "Visit Count:", Q_root->children[action]->visit_count);
+                // py::print("Action:", action, "Visit Count:", Q_root->children[action]->visit_count);
             }
             else {
                 action_visits.emplace_back(action, 0);
-                py::print("Action:", action, "Visit Count:", 0);
+                // py::print("Action:", action, "Visit Count:", 0);
             }
         }
 
@@ -278,14 +288,14 @@ public:
         else {
             action_selected = actions[std::distance(action_probs.begin(), std::max_element(action_probs.begin(), action_probs.end()))];
         }
-        py::print("Action Selected:", action_selected, "Action Probabilities:", action_probs);
+        // py::print("Action Selected:", action_selected, "Action Probabilities:", action_probs);
         // Return the selected action, action probabilities, and root node
         return std::make_tuple(action_selected, action_probs, Q_root);
     }
 
     // Simulate a game starting from a given node
     double _simulateV(std::shared_ptr<Node> V_sh, std::shared_ptr<Node> Q_sh, py::object simulate_env, py::object policy_value_func) {
-        py::print("\t------------------------------------------------------STIMULATE V------------------------------------------------------");
+        // py::print("\t------------------------------------------------------STIMULATE V------------------------------------------------------");
         // Select next action
         int action;
         std::shared_ptr<Node> V_sh_plus_1 = nullptr;
@@ -306,23 +316,23 @@ public:
             int action_tmp = kv.first;
             std::shared_ptr<Node> Q_sh_a_temp = kv.second;
 
-            py::print("\tUPDATE - action:", action_tmp, ", (Q_sh_a_temp->visit_count / V_sh->visit_count) * pow(Q_sh_a_temp->value, p) =", (Q_sh_a_temp->visit_count / V_sh->visit_count) * pow(Q_sh_a_temp->value, p));
-            py::print("\t\tQ_sh_a_temp->visit_count:", Q_sh_a_temp->visit_count);
-            py::print("\t\tV_sh->visit_count:", V_sh->visit_count);
-            py::print("\t\tpow(Q_sh_a_temp->value, p):", pow(Q_sh_a_temp->value, p));
+            // py::print("\tUPDATE - action:", action_tmp, ", (Q_sh_a_temp->visit_count / V_sh->visit_count) * pow(Q_sh_a_temp->value, p) =", (Q_sh_a_temp->visit_count / V_sh->visit_count) * pow(Q_sh_a_temp->value, p));
+            // py::print("\t\tQ_sh_a_temp->visit_count:", Q_sh_a_temp->visit_count);
+            // py::print("\t\tV_sh->visit_count:", V_sh->visit_count);
+            // py::print("\t\tpow(Q_sh_a_temp->value, p):", pow(Q_sh_a_temp->value, p));
             
             V_sh->value += ((double) Q_sh_a_temp->visit_count / V_sh->visit_count) * pow(Q_sh_a_temp->value, p);
-            py::print("\t\tCurrent V_sh->value:", V_sh->value, "\n");
+            // py::print("\t\tCurrent V_sh->value:", V_sh->value, "\n");
         }
         V_sh->value = pow(V_sh->value, 1 / p);
-        py::print("\tupdated V_sh->value:", V_sh->value);
-        py::print("\tupdated V_sh->visit_count:", V_sh->visit_count);
-        py::print("\t-------------------------------------------------------------------------------------------------------------------------");
+        // py::print("\tupdated V_sh->value:", V_sh->value);
+        // py::print("\tupdated V_sh->visit_count:", V_sh->visit_count);
+        // py::print("\t-------------------------------------------------------------------------------------------------------------------------");
         return leaf_value;
     }
     
     double _simulateQ(int action, std::shared_ptr<Node> V_sh_plus_1, std::shared_ptr<Node> Q_sh_a, py::object simulate_env, py::object policy_value_func) {
-        py::print("\t------------------------------------------------------STIMULATE Q------------------------------------------------------");                
+        // py::print("\t------------------------------------------------------STIMULATE Q------------------------------------------------------");                
 
         // Check if game is finished and get the reward
         bool done;
@@ -334,12 +344,12 @@ public:
         winner = result[1].cast<int>();
 
         if (!done) {
-            py::print("\tGAME IS NOT DONE!, Action:", action);
+            // py::print("\tGAME IS NOT DONE!, Action:", action);
             if (V_sh_plus_1->is_leaf()) {
                 leaf_value = _expand_leaf_node(V_sh_plus_1, Q_sh_a, simulate_env, policy_value_func);
 
                 // Rescale leaf_value from [-1; 1] to [0; 1]
-                leaf_value = std::max(0.0, (leaf_value + 1.0) / 2.0);                 
+                // leaf_value = std::max(0.0, (leaf_value + 1.0) / 2.0);                 
 
                 V_sh_plus_1->value = leaf_value;
                 V_sh_plus_1->visit_count++;
@@ -347,13 +357,13 @@ public:
                 leaf_value = _simulateV(V_sh_plus_1, Q_sh_a, simulate_env, policy_value_func);
                 
                 // Rescale leaf_value from [-1; 1] to [0; 1]
-                leaf_value = std::max(0.0, (leaf_value + 1.0) / 2.0);
+                // leaf_value = std::max(0.0, (leaf_value + 1.0) / 2.0);
             }
-            py::print("\tleaf_value:", leaf_value, ", V_sh_plus_1->value:", V_sh_plus_1->value);
+            // py::print("\tleaf_value:", leaf_value, ", V_sh_plus_1->value:", V_sh_plus_1->value);
         } else {
-            py::print("\tGAME OVER., Action:", action);
+            // py::print("\tGAME OVER., Action:", action);
             std::string battle_mode = simulate_env.attr("battle_mode_in_simulation_env").cast<std::string>();            
-            py::print("\tBattle_mode:", battle_mode);
+            // py::print("\tBattle_mode:", battle_mode);
             // Get leaf_value 
             if (winner == -1) {
                 leaf_value = 0; 
@@ -366,20 +376,20 @@ public:
             }
             
             // Rescale leaf_value from [-1; 1] to [0; 1]
-            leaf_value = std::max(0.0, (leaf_value + 1.0) / 2.0);  
+            // leaf_value = std::max(0.0, (leaf_value + 1.0) / 2.0);  
             
             V_sh_plus_1->value = leaf_value;
             V_sh_plus_1->visit_count++;
 
-            py::print("\tleaf_value:", leaf_value, ", V_sh_plus_1->value:", V_sh_plus_1->value);              
+            // py::print("\tleaf_value:", leaf_value, ", V_sh_plus_1->value:", V_sh_plus_1->value);              
         }
 
         // Update Q node
         Q_sh_a->value = (Q_sh_a->value * Q_sh_a->visit_count + leaf_value + gamma * V_sh_plus_1->value) / (Q_sh_a->visit_count + 1);
         Q_sh_a->visit_count++;
-        py::print("\tupdated Q_sh_a->value:", Q_sh_a->value);
-        py::print("\tupdated Q_sh_a->visit_count:", Q_sh_a->visit_count);
-        py::print("\t--------------------------------------------------------------------------------------------------------------------------");
+        // py::print("\tupdated Q_sh_a->value:", Q_sh_a->value);
+        // py::print("\tupdated Q_sh_a->visit_count:", Q_sh_a->visit_count);
+        // py::print("\t--------------------------------------------------------------------------------------------------------------------------");
         return leaf_value;
     }
     
@@ -410,21 +420,27 @@ private:
     }
 
     // Helper: Softmax function to normalize values
-    static std::vector<double> softmax(const std::vector<double>& values, double temperature) {
-        std::vector<double> exps;
+    static std::map<int, double> softmax(const std::map<int, double> action_probs_dict, double temperature) {
+        std::map<int, double> exps;
         double sum = 0.0;
-        double max_value = *std::max_element(values.begin(), values.end());
 
-        for (double v : values) {
-            double exp_v = std::exp((v - max_value) / temperature);
-            exps.push_back(exp_v);
+        // Find the maximum value in the action_probs_dict to avoid overflow
+        double max_value = std::max_element(action_probs_dict.begin(), action_probs_dict.end(),
+                                            [](const std::pair<int, double>& a, const std::pair<int, double>& b) {
+                                                return a.second < b.second;
+                                            })->second;
+        // Calculate exponentials of the logits adjusted by temperature
+        for (const auto& kv : action_probs_dict) {
+            double exp_v = std::exp((kv.second - max_value) / temperature);
+            exps[kv.first] = exp_v;  // Store in the map with the same action key
             sum += exp_v;
         }
-
-        for (double& exp_v : exps) {
-            exp_v /= sum;
+    
+        // Normalize the exponentials
+        for (auto& kv : exps) {
+            kv.second /= sum;
         }
-
+    
         return exps;
     }
 
@@ -445,7 +461,10 @@ PYBIND11_MODULE(mcts_alphazero, m) {
             return std::make_shared<Node>(parent, prior_p);
         }), py::arg("parent")=nullptr, py::arg("prior_p")=1.0)
         .def("is_leaf", &Node::is_leaf)
-        .def("is_root", &Node::is_root);
+        .def("is_root", &Node::is_root)
+        .def("visit_count", [](const std::shared_ptr<Node>& self) {
+            return self->visit_count;  
+        });     
 
     // Bind the MCTS class
     py::class_<MCTS>(m, "MCTS")
@@ -463,5 +482,5 @@ PYBIND11_MODULE(mcts_alphazero, m) {
              py::arg("state_config_for_env_reset"),
              py::arg("policy_value_func"),
              py::arg("temperature"),
-             py::arg("sample"));            
+             py::arg("sample"));
 }

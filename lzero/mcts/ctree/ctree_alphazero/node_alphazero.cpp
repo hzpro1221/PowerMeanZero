@@ -10,5 +10,8 @@ PYBIND11_MODULE(node_alphazero, m) {
             return std::make_shared<Node>(parent, prior_p);
         }), py::arg("parent")=nullptr, py::arg("prior_p")=1.0)
         .def("is_leaf", &Node::is_leaf)
-        .def("is_root", &Node::is_root);
+        .def("is_root", &Node::is_root)
+        .def("visit_count", [](const std::shared_ptr<Node>& self) {
+            return self->visit_count;  
+        });
 }
