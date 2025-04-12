@@ -204,13 +204,11 @@ class AlphaZeroEvaluator(ISerialEvaluator):
                     # policy forward
                     # ==============================================================
                     policy_output = self._policy.forward(obs)
-                    print(policy_output)
-                    actions = {env_id: output['action'] for env_id, output in policy_output.items()}
-                    probs = {env_id: output['probs'] for env_id, output in policy_output.items()}
+                    actions = {env_id: output for env_id, output in policy_output.items()}
                     # ==============================================================
                     # Interact with env.
                     # ==============================================================
-                    timesteps = self._env.step(actions, probs)
+                    timesteps = self._env.step(actions)
                     timesteps = to_tensor(timesteps, dtype=torch.float32)
                     for env_id, t in timesteps.items():
                         if t.info.get('abnormal', False):

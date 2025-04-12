@@ -213,7 +213,7 @@ class TicTacToeEnv(BaseEnv):
         else:
             self.board = np.zeros((self.board_size, self.board_size), dtype="int32")
 
-    def step(self, action, prob=None):
+    def step(self, action):
         if self.battle_mode == 'self_play_mode':
             if self.prob_random_agent > 0:
                 if np.random.rand() < self.prob_random_agent:
@@ -255,15 +255,16 @@ class TicTacToeEnv(BaseEnv):
 
             return timestep
         elif self.battle_mode == 'eval_mode':
+            print(action)
             # player 1 battle with expert player 2
 
             # player 1's turn
             if self._replay_path is not None:
-                self._frames.append(self._env.render(prob=prob))
-            timestep_player1 = self._player_step(action, "policy")
+                self._frames.append(self._env.render(prob=action["probs"], player="policy"))
+            timestep_player1 = self._player_step(action["action"], "policy")
             # self.env.render()
             if timestep_player1.done:
-                self._frames.append(self._env.render(prob=prob))
+                self._frames.append(self._env.render(prob=action["probs"], player="policy"))
 
                 # NOTE: in eval_mode, we must set to_play as -1, because we don't consider the alternation between players.
                 # And the to_play is used in MCTS.
@@ -289,10 +290,11 @@ class TicTacToeEnv(BaseEnv):
                 bot_action = self.bot_action()
             # print('player 2 (computer player): ' + self.action_to_string(bot_action))
             if self._replay_path is not None:
-                self._frames.append(self._env.render(prob=prob))
+                self._frames.append(self._env.render(prob=None, player="bot"))
             timestep_player2 = self._player_step(bot_action, "bot")
             if self._replay_path is not None:
-                self._frames.append(self._env.render(prob=prob))
+                self._frames.append(self._env.render(prob=None, player="bot"))
+
             # the eval_episode_return is calculated from Player 1's perspective
             timestep_player2.info['eval_episode_return'] = -timestep_player2.reward
             timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
@@ -303,7 +305,7 @@ class TicTacToeEnv(BaseEnv):
             timestep.obs['to_play'] = -1
 
             if timestep_player2.done:
-                self._frames.append(self._env.render(prob=prob))
+                self._frames.append(self._env.render(prob=None, player="bot"))
                 if self._replay_path is not None:
                     if not os.path.exists(self._replay_path):
                         os.makedirs(self._replay_path)
@@ -623,7 +625,7 @@ class TicTacToeEnv(BaseEnv):
 
         return new_board, new_legal_actions
 
-    def render(self, prob):
+    def render(self, prob, player):
         """
         Render the game state, either as a string (mode='human') or as an RGB image (mode='rgb_array').
 
@@ -670,15 +672,26 @@ class TicTacToeEnv(BaseEnv):
             # Draw the 'X' and 'O' symbols for each player
             for i in range(self.board_size):
                 for j in range(self.board_size):
-                    if self.board[i, j] == 1:  # Player 1
-                        ax.add_patch(patches.Rectangle(
-                                        (j - 0.5, i - 0.5), 1, 1,
-                                        color='blue', alpha=prob[i*3 + j]
-                                    ))
-                        ax.text(j, i, 'X', ha='center', va='center', color='black', fontsize=24)
-                        ax.text(j, i + 0.3, f"{prob[i*3 + j]:.2f}", ha='center', va='top', fontsize=10, color='black')
+                    if self.board[i, j] == 1:  # Player 1   
+                        if (player == "policy"):
+                            ax.add_patch(patches.Rectangle(
+                                            (j - 0.5, i - 0.5), 1, 1,
+                                            color='blue', alpha=prob[i*3 + j]
+                                        ))
+                            ax.text(j, i, 'X', ha='center', va='center', color='black', fontsize=24)
+                            ax.text(j, i + 0.3, f"{prob[i*3 + j]:.2f}", ha='center', va='top', fontsize=10, color='black')
+                        elif (player == "bot"):
+                            ax.text(j, i, 'O', ha='center', va='center', color='white', fontsize=24)            
                     elif self.board[i, j] == 2:  # Player 2
-                        ax.text(j, i, 'O', ha='center', va='center', color='white', fontsize=24)
+                        if (player == "policy"):
+                            ax.add_patch(patches.Rectangle(
+                                            (j - 0.5, i - 0.5), 1, 1,
+                                            color='blue', alpha=prob[i*3 + j]
+                                        ))
+                            ax.text(j, i, 'X', ha='center', va='center', color='black', fontsize=24)
+                            ax.text(j, i + 0.3, f"{prob[i*3 + j]:.2f}", ha='center', va='top', fontsize=10, color='black')
+                        elif (player == "bot"):
+                            ax.text(j, i, 'O', ha='center', va='center', color='white', fontsize=24)  
 
             # Setup the axes
             ax.set_xticks(np.arange(0.5, self.board_size, 1))
@@ -690,7 +703,7 @@ class TicTacToeEnv(BaseEnv):
             ax.yaxis.set_ticks_position('none')
 
             # Set the title of the game
-            plt.title('TicTacToe: ' + ('Policy Turn' if self.current_player == 1 else 'Bot Turn'))
+            plt.title('TicTacToe: ' + ('Player 1' if self.current_player == 1 else 'Player 2'))
 
             fig.canvas.draw()
 
