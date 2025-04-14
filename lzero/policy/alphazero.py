@@ -222,17 +222,17 @@ class AlphaZeroPolicy(Policy):
             from lzero.mcts.ctree.ctree_alphazero.test.eval_alphazero_ctree import find_and_add_to_sys_path
             # Use the function to add the desired path to sys.path
             find_and_add_to_sys_path("lzero/mcts/ctree/ctree_alphazero/build")
-            import mcts_alphazero
+            import mcts_alphazero            
             self._collect_mcts = mcts_alphazero.MCTS(self._cfg.mcts.max_moves, self._cfg.mcts.num_simulations,
                                                      self._cfg.mcts.pb_c_base,
                                                      self._cfg.mcts.pb_c_init, self._cfg.mcts.root_dirichlet_alpha,
-                                                     self._cfg.mcts.root_noise_weight, self.simulate_env)
+                                                     self._cfg.mcts.root_noise_weight, self.simulate_env)        
         else:
             if self._cfg.sampled_algo:
                 from lzero.mcts.ptree.ptree_az_sampled import MCTS
             else:
                 from lzero.mcts.ptree.ptree_az import MCTS
-            self._collect_mcts = MCTS(self._cfg.mcts, self.simulate_env)
+            self._collect_mcts = MCTS(self._cfg.mcts, self.simulate_env)            
 
         self.collect_mcts_temperature = 1
 
