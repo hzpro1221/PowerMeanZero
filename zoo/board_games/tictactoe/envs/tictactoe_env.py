@@ -49,7 +49,7 @@ class TicTacToeEnv(BaseEnv):
         # (str): The mode of the battle. Choices are 'self_play_mode' or 'alpha_beta_pruning'.
         battle_mode='self_play_mode',
         # (str): The mode of Monte Carlo Tree Search. This is only used in AlphaZero.
-        battle_mode_in_simulation_env='play_with_bot_mode',
+        battle_mode_in_simulation_env='self_play_mode',
         # (str): The type of action the bot should take. Choices are 'v0' or 'alpha_beta_pruning'.
         bot_action_type='v0',
         # (str): The folder path where replay video saved, if None, will not save replay video.

@@ -176,7 +176,7 @@ private:
     }
 
     // Expand a leaf node by adding its children based on policy probabilities
-    double _expand_leaf_node(std::shared_ptr<Node> V_sh, std::shared_ptr<Node> Q_sh, py::object simulate_env, py::object policy_value_func) {
+    double _expand_leaf_node(std::shared_ptr<Node> V_sh, std::shared_ptr<Node> Q_sh, std::vector<int> legal_actions, py::object policy_value_func) {
         // py::print("\t\t--------------------------------------EXPAND LEAF--------------------------------------");
         std::map<int, double> action_probs_dict;
         double leaf_value;
@@ -184,14 +184,9 @@ private:
         // Call the policy-value function to get action probabilities and leaf value
         py::tuple result = policy_value_func(simulate_env);
         // py::print("original action_probs_dict:", result[0].cast<std::map<int, double>>(), 1);
-        action_probs_dict = softmax(result[0].cast<std::map<int, double>>(), 1);
+        // action_probs_dict = softmax(result[0].cast<std::map<int, double>>(), 1);
         
         leaf_value = result[1].cast<double>();
-
-        // Get the legal actions from the simulation environment
-        py::list legal_actions_list = simulate_env.attr("legal_actions").cast<py::list>();
-        // Temoral comment this line of code; For play_with_bot purpose
-        std::vector<int> legal_actions = legal_actions_list.cast<std::vector<int>>();
 
         // py::print("extend Node:", legal_actions);
         // Add child nodes for legal actions
@@ -309,23 +304,70 @@ private:
 
     // Simulate a game starting from a given node
     std::map<int, double> _simulateV(std::shared_ptr<Node> V_sh, std::shared_ptr<Node> Q_sh, std::shared_ptr<Node> V_sh_2, std::shared_ptr<Node> Q_sh_2, py::object simulate_env, py::object policy_value_func) {
-        // ------------------------------------------------------------------------------
+        // py::print("\t------------------------------------------------------STIMULATE V------------------------------------------------------");
         
-        // If there is no child in the V_sh, then return
-        if (V_sh->children.empty()) {
-            double leaf_value = -1.0;
-            double is_end = 0.0;
+        // If V_sh is leaf_node, then expand that node and update V_value
+        if (V_sh->is_leaf()) {
+            double leaf_value;
             double expand_count = 0.0;
+            double is_end;
 
-            std::map<int, double> result; 
+            // Check if game is finished and get the reward
+            bool done;
+            int winner;
+
+            py::tuple result = simulate_env.attr("get_done_winner")();
+            done = result[0].cast<bool>();
+            winner = result[1].cast<int>();
+
+            // If game is not done, then expand node and roll-out to get the intermidate reward
+            if (!done) {
+                is_end = 0.0;
+
+                py::list legal_actions_list = simulate_env.attr("legal_actions").cast<py::list>();
+                std::vector<int> legal_actions = legal_actions_list.cast<std::vector<int>>();                
+
+                leaf_value = _expand_leaf_node(V_sh, Q_sh, simulate_env, policy_value_func);
+
+                // Rescale leaf_value from [-1; 1] to [0; 1]
+                leaf_value = std::max(0.0, (leaf_value + 1.0) / 2.0);
+                
+                // Update V_sh
+                V_sh->value = leaf_value;
+                V_sh->visit_count++;           
             
+                // Update Q node
+                Q_sh->value = (Q_sh->value * Q_sh->visit_count + leaf_value + gamma * V_sh->value) / (Q_sh->visit_count + 1);
+                Q_sh->visit_count++;                               
+            } else { 
+                is_end = 1.0;
+
+                // Else, then get the game result
+                if (winner == -1) {
+                    leaf_value = 0;
+                } else {
+                    leaf_value = (simulate_env.attr("current_player").cast<int>() == winner) ? 1 : -1;
+                }
+
+                // Rescale leaf_value from [-1; 1] to [0; 1]
+                leaf_value = std::max(0.0, (leaf_value + 1.0) / 2.0);
+                
+                // Swap leaf_value
+                leaf_value = 1.0 - leaf_value;
+
+                // Update the node
+                V_sh->value = leaf_value;
+                V_sh->visit_count++;                
+            }
+
+            std::map<int, double> result;
             result[0] = leaf_value;
-            result[1] = is_end;
-            result[2] = expand_count;
-            return result;
+            result[1] = expand_count;
+            result[2] = is_end;
+
+            return result; 
         }
         
-        // py::print("\t------------------------------------------------------STIMULATE V------------------------------------------------------");
         // Select next action
         int action;
         std::shared_ptr<Node> V_sh_plus_1 = nullptr;
@@ -359,66 +401,42 @@ private:
         // py::print("\t-------------------------------------------------------------------------------------------------------------------------");
         return result;
     }
-    
+
     std::map<int, double> _simulateQ(int action, std::shared_ptr<Node> V_sh_plus_1, std::shared_ptr<Node> Q_sh_a, std::shared_ptr<Node> V_sh_2, std::shared_ptr<Node> Q_sh_2, py::object simulate_env, py::object policy_value_func) {
         // py::print("\t------------------------------------------------------STIMULATE Q------------------------------------------------------");                
+        
+        // ----------------------------------------------------------------------------- 
+        // Should get legal action before run _simulateV of next player :vv
+        py::list legal_actions_list = simulate_env.attr("legal_actions").cast<py::list>();
+        std::vector<int> legal_actions = legal_actions_list.cast<std::vector<int>>();
+
         // Player 2's turn
         std::map<int, double> result = _simulateV(V_sh_2, Q_sh_2, V_sh_plus_1, Q_sh_a, simulate_env, policy_value_func);
         
         // Dispatch returned data
         double leaf_value = result[0];
-        double is_end = result[1];
-        double expand_count = result[2];
+        double expand_count = result[1];
+        double is_end = result[2];
 
-        // If is_end is False
-        if (is_end == 0.0) {
-            // Check if game is finished and get the reward
-            bool done;
-            int winner;
+        // Swap the leaf_value 
+        leaf_value = 1.0 - leaf_value;        
 
-            py::tuple result = simulate_env.attr("get_done_winner")();
-            done = result[0].cast<bool>();
-            winner = result[1].cast<int>();
-            
-            // If game is not done, then expand node 
-            if (!done) {
-                double temp_leaf_value = _expand_leaf_node(V_sh_plus_1, Q_sh_a, simulate_env, policy_value_func);
+        // If expand_count == 0.0 and game is not end yet (game_end == 0.0), then expand node, otherwise just keep the node intact :vv. 
+        if ((expand_count == 0.0) && (game_end == 0.0)) {
+            // Expand node
+            _expand_leaf_node(V_sh_plus_1, Q_sh_a, legal_actions, policy_value_func);   
 
-                if (expand_count == 0.0) {
-                    leaf_value = temp_leaf_value;
+            // Update node
+            V_sh_plus_1->value = leaf_value;
+            V_sh_plus_1->visit_count++;
 
-                    // Rescale leaf_value from [-1; 1] to [0; 1]
-                    leaf_value = std::max(0.0, (leaf_value + 1.0) / 2.0);                        
-                } else if (expand_count == 1.0) {
-                    // Swap the leaf_value
-                    leaf_value = 1.0 - leaf_value;
+            expand_count++;
+        } else if ((expand_count == 0.0) && (game_end == 1.0)) {
+            // Update node
+            V_sh_plus_1->value = leaf_value;
+            V_sh_plus_1->visit_count++;
 
-                    // Change is "is_end" status to True (1.0)
-                    is_end = 1.0;
-                }
-                expand_count++;
-
-                V_sh_plus_1->value = leaf_value;
-                V_sh_plus_1->visit_count++;
-            } else {
-                if (winner == -1) {
-                    leaf_value = 0;
-                } else {
-                    leaf_value = (simulate_env.attr("current_player").cast<int>() == winner) ? 1 : -1;
-                }
-
-                // Rescale leaf_value from [-1; 1] to [0; 1]
-                leaf_value = std::max(0.0, (leaf_value + 1.0) / 2.0);   
-                
-                // Set "is_end" to True
-                is_end = 1.0;
-
-                V_sh_plus_1->value = leaf_value;
-                V_sh_plus_1->visit_count++;                
-            }
-        } else if (is_end == 1.0) {
-            // Swap the reward
-            leaf_value = 1.0 - leaf_value;
+            expand_count++;
         }
 
         // Update Q node
@@ -426,8 +444,8 @@ private:
         Q_sh_a->visit_count++;
       
         result[0] = leaf_value;
-        result[1] = is_end;
-        result[2] = expand_count;
+        result[1] = expand_count;
+        result[2] = is_end;
 
         return result;
     }
