@@ -222,7 +222,7 @@ class TicTacToeEnv(BaseEnv):
                 if np.random.rand() < self.prob_expert_agent:
                     action = self.bot_action()
 
-            timestep = self._player_step(action)
+            timestep = self._player_step(action, player="policy")
             if timestep.done:
                 # The eval_episode_return is calculated from Player 1's perspective。
                 timestep.info['eval_episode_return'] = -timestep.reward if timestep.obs[
@@ -313,7 +313,6 @@ class TicTacToeEnv(BaseEnv):
                     self.display_frames_as_mp4(self._frames, path)
                     print(f'replay {path} saved!')
                     self._save_replay_count += 1
-
             return timestep
 
     def _player_step(self, action, player):
