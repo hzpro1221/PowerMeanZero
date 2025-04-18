@@ -31,17 +31,17 @@ private:
     public:
     // Constructor to initialize MCTS with optional parameters
     MCTS(int max_moves=512, int num_simulations=800,
-         double pb_c_base=19652, double pb_c_init=3,
-         double root_dirichlet_alpha=0.3, double root_noise_weight=0.25, py::object simulate_env=py::none(),
-         float gamma = 0.99, float p = 2, float c = 1.25)
+        double pb_c_base=19652, double pb_c_init=3,
+        double root_dirichlet_alpha=0.3, double root_noise_weight=0.25, py::object simulate_env=py::none(),
+        float gamma = 0.99, float p = 2, float c = 1.25)
         : max_moves(max_moves), num_simulations(num_simulations),
-          pb_c_base(pb_c_base), pb_c_init(pb_c_init),
-          root_dirichlet_alpha(root_dirichlet_alpha),
-          root_noise_weight(root_noise_weight),
-          gamma(gamma),
-          p(p),
-          c(c),
-          simulate_env(simulate_env) {}
+        pb_c_base(pb_c_base), pb_c_init(pb_c_init),
+        root_dirichlet_alpha(root_dirichlet_alpha),
+        root_noise_weight(root_noise_weight),
+        gamma(gamma),
+        p(p),
+        c(c),
+        simulate_env(simulate_env) {}
 
     // Getter for the simulation environment (Python object)
     py::object get_simulate_env() const {
@@ -63,15 +63,15 @@ private:
     double _ucb_score(std::shared_ptr<Node> V_sh, std::shared_ptr<Node> Q_sh_a) {
         // py::print("\t\t\t------------------------------------_UCB_SCORE------------------------------------");
         // Calculate PB-C component of UCB
-        // double pb_c = std::log((V_sh->visit_count + pb_c_base + 1) / pb_c_base) + pb_c_init;
-        // pb_c *= std::sqrt(std::sqrt(V_sh->visit_count) / (Q_sh_a->visit_count));
+        double pb_c = std::log((V_sh->visit_count + pb_c_base + 1) / pb_c_base) + pb_c_init;
+        pb_c *= std::sqrt(std::sqrt(V_sh->visit_count) / (Q_sh_a->visit_count));
 
         // py::print("\t\t\tV_sh->visit_count:", V_sh->visit_count, "\n");
 
         // py::print("\t\t\tQ_sh_a->visit_count:", Q_sh_a->visit_count);
         // py::print("\t\t\tQ_sh_a->prior_p:", Q_sh_a->prior_p);
         // py::print("\t\t\tQ_sh_a->value:", Q_sh_a->value);
-        // py::print("prior_p:", Q_sh_a->prior_p, "; Q_sh_a->prior_p * c", Q_sh_a->prior_p * c);
+        // py::print("\t\tprior_p:", Q_sh_a->prior_p, "; Q_sh_a->prior_p * c", Q_sh_a->prior_p * c);
         // Combine prior probability and value score
         double prior_score = Q_sh_a->prior_p * c * std::sqrt(std::sqrt(V_sh->visit_count) / (Q_sh_a->visit_count));
         double value_score = Q_sh_a->value;
@@ -127,15 +127,12 @@ private:
 
             // Get legal actions from the simulation environment
             py::list legal_actions_py = simulate_env.attr("legal_actions").cast<py::list>();
-
             
             std::vector<int> legal_actions;
             for (py::handle h : legal_actions_py) {
                 legal_actions.push_back(h.cast<int>());
             }
             
-            // py::print("legal_actions:", legal_actions);
-
             // Check if the action is legal and calculate UCB score
             if (std::find(legal_actions.begin(), legal_actions.end(), action_tmp) != legal_actions.end()) {
                 // py::print("\t\tCACULATE UCB SCORE FOR ACTION:", action_tmp);
@@ -149,29 +146,18 @@ private:
             }
         }
 
+        py::list legal_actions_py = simulate_env.attr("legal_actions").cast<py::list>();
+            
+        std::vector<int> legal_actions;
+        for (py::handle h : legal_actions_py) {
+            legal_actions.push_back(h.cast<int>());
+        }        
+        // py::print("legal_actions:", legal_actions); 
+
         // If no valid child is found, then extend the first action in legal_action list and choose that action as the next action
         if (action == -1) {
-            // Get legal actions from the simulation environment
-            py::list legal_actions_py = simulate_env.attr("legal_actions").cast<py::list>();
-
-            std::vector<int> legal_actions;
-            for (py::handle h : legal_actions_py) {
-                legal_actions.push_back(h.cast<int>());
-            }
-
-            action = legal_actions.front();
-
-            // Call the policy-value function to get action probabilities and leaf value
-            py::tuple result = policy_value_func(simulate_env);
-            std::map<int, double> action_probs_dict = result[0].cast<std::map<int, double>>();
-            double leaf_value = result[1].cast<double>();
-
-            // Adding new child node 
-            V_sh->children[action] = std::make_shared<Node>(V_sh, action_probs_dict[action]);
-            Q_sh->children[action] = std::make_shared<Node>(Q_sh, action_probs_dict[action]);            
-
-            Q_sh_a = Q_sh->children[action];
-            V_sh_plus_1 = V_sh->children[action];
+            V_sh_plus_1 = V_sh;
+            Q_sh_a = Q_sh;
         }
         
         // py::print("\t\taction selected:", action, "- UCB score:", best_score);       
@@ -180,21 +166,27 @@ private:
     }
 
     // Expand a leaf node by adding its children based on policy probabilities
-    double _expand_leaf_node(std::shared_ptr<Node> V_sh, std::shared_ptr<Node> Q_sh, std::vector<int> legal_actions, py::object simulate_env, py::object policy_value_func) {
+    double _expand_leaf_node(std::shared_ptr<Node> V_sh, std::shared_ptr<Node> Q_sh, py::object simulate_env, py::object policy_value_func) {
         // py::print("\t\t--------------------------------------EXPAND LEAF--------------------------------------");
         std::map<int, double> action_probs_dict;
         double leaf_value;
 
         // Call the policy-value function to get action probabilities and leaf value
         py::tuple result = policy_value_func(simulate_env);
-        // py::print("original action_probs_dict:", result[0].cast<std::map<int, double>>(), 1);
-        action_probs_dict = softmax(result[0].cast<std::map<int, double>>(), 1);
+        // py::print("\t\taction_probs_dict:", result[0].cast<std::map<int, double>>(), 1);
+        action_probs_dict = result[0].cast<std::map<int, double>>();
+        // action_probs_dict = softmax(result[0].cast<std::map<int, double>>(), 1);
         
         leaf_value = result[1].cast<double>();
 
-        // py::print("extend Node:", legal_actions);
+        // Get the legal actions from the simulation environment
+        py::list legal_actions_list = simulate_env.attr("legal_actions").cast<py::list>();
+        // Temoral comment this line of code; For play_with_bot purpose
+        std::vector<int> legal_actions = legal_actions_list.cast<std::vector<int>>();
+
+        // py::print("\t\tExtend Node:", legal_actions);
         // Add child nodes for legal actions
-        // py::print("action_probs_dict:", action_probs_dict);
+        // py::print("\t\tAction_probs_dict:", action_probs_dict);
         for (const auto& kv : action_probs_dict) {
             int action = kv.first;
             double prior_p = kv.second;
@@ -237,11 +229,7 @@ private:
 
         // Expand and update value for root node 
         // py::print("-----------------------------------INITIALIZE ROOT NODE-----------------------------------");
-        py::list legal_actions_list = simulate_env.attr("legal_actions").cast<py::list>();
-        std::vector<int> legal_actions = legal_actions_list.cast<std::vector<int>>();                
-
-        // py::print("legal_actions", legal_actions);
-        double leaf_value = _expand_leaf_node(V_root, Q_root, legal_actions, simulate_env, policy_value_func);
+        double leaf_value = _expand_leaf_node(V_root, Q_root, simulate_env, policy_value_func);
         V_root->visit_count++;
         V_root->value = leaf_value;
         Q_root->value = leaf_value + gamma * V_root->value;  
@@ -253,7 +241,7 @@ private:
         // py::print("Q_root->children:", Q_root->children);
         // py::print("Q_root->value:", Q_root->value);
         // py::print("Q_root->visit_count:", Q_root->visit_count, "\n");        
-        leaf_value = _expand_leaf_node(V_root_2, Q_root_2, legal_actions, simulate_env, policy_value_func);
+        leaf_value = _expand_leaf_node(V_root_2, Q_root_2, simulate_env, policy_value_func);
         V_root_2->visit_count++;
         V_root_2->value = leaf_value;
         Q_root_2->value = leaf_value + gamma * V_root_2->value;  
@@ -275,6 +263,13 @@ private:
             _add_exploration_noise(Q_root_2);            
         }
 
+        py::list legal_actions_py = simulate_env.attr("legal_actions").cast<py::list>();
+            
+        std::vector<int> legal_actions;
+        for (py::handle h : legal_actions_py) {
+            legal_actions.push_back(h.cast<int>());
+        }
+        
         // Run MCTS simulations
         for (int n = 1; n < num_simulations; ++n) {
             // py::print("-----------------------------------NUM STIMULATION:", n, "-----------------------------------"); 
@@ -285,20 +280,29 @@ private:
                 katago_game_state
             );
             simulate_env.attr("battle_mode") = simulate_env.attr("battle_mode_in_simulation_env");
-
+            // py::print("battle_mode:", simulate_env.attr("battle_mode_in_simulation_env"));
             // Reset player_turn back to 1
             player_turn = 1;
-
+            
             _simulateV(V_root, Q_root, V_root_2, Q_root_2, simulate_env, policy_value_func);
             // py::print("-------------------------------------------------------------------------------------------");
         }
+        simulate_env.attr("reset")(
+            state_config_for_env_reset["start_player_index"].cast<int>(),
+            init_state,
+            state_config_for_env_reset["katago_policy_init"].cast<bool>(),
+            katago_game_state
+        );
+        simulate_env.attr("battle_mode") = simulate_env.attr("battle_mode_in_simulation_env");        
+        // py::print("player:", simulate_env.attr("current_player").cast<int>());
+        // py::print("legal_actions:", legal_actions);
 
         // Collect visit counts from the root's children
         std::vector<std::pair<int, int>> action_visits;
         for (int action = 0; action < simulate_env.attr("action_space").attr("n").cast<int>(); ++action) {
             if (Q_root->children.count(action)) {
                 action_visits.emplace_back(action, Q_root->children[action]->visit_count);
-                // py::print("Action:", action, "Visit Count:", Q_root->children[action]->visit_count);
+                // py::print("Action:", action, "Visit Count:", Q_root->children[action]->visit_count, ", Q_value:", Q_root->children[action]->value, ", prior_p:", Q_root->children[action]->prior_p);
             }
             else {
                 action_visits.emplace_back(action, 0);
@@ -323,86 +327,16 @@ private:
         else {
             action_selected = actions[std::distance(action_probs.begin(), std::max_element(action_probs.begin(), action_probs.end()))];
         }
-        // py::print("Action Selected:", action_selected, "Action Probabilities:", action_probs);
+        // py::print("Action Selected:", action_selected, "Action Probabilities:", action_probs, "\n");
         // Return the selected action, action probabilities, and root node
         return std::make_tuple(action_selected, action_probs, Q_root);
     }
 
     // Simulate a game starting from a given node
-    std::map<int, double> _simulateV(std::shared_ptr<Node> V_sh, std::shared_ptr<Node> Q_sh, std::shared_ptr<Node> V_sh_2, std::shared_ptr<Node> Q_sh_2, py::object simulate_env, py::object policy_value_func) {
-        // py::print("\t------------------------------------------------------STIMULATE V", player_turn,"------------------------------------------------------");
-        
+    double _simulateV(std::shared_ptr<Node> V_sh, std::shared_ptr<Node> Q_sh, std::shared_ptr<Node> V_sh_2, std::shared_ptr<Node> Q_sh_2, py::object simulate_env, py::object policy_value_func) {
+        // py::print("\t------------------------------------------------------STIMULATE V", simulate_env.attr("current_player").cast<int>(), "------------------------------------------------------");
         // Swap player turn
-        if (player_turn == 1) {
-            player_turn = 2;
-        } else {
-            player_turn = 1;
-        }
-        // py::print("V_sh->is_leaf()? -", V_sh->is_leaf());
-        // py::print("V_sh->children -", V_sh->children);
-
-        // Check if game is finished and get the reward
-        bool done;
-        int winner;
-
-        py::tuple game_result = simulate_env.attr("get_done_winner")();
-        done = game_result[0].cast<bool>();
-        winner = game_result[1].cast<int>();
-        
-        // If V_sh is leaf_node, then expand that node and update V_value
-        // If game is over
-        if (V_sh->is_leaf() || done) {
-            // py::print("\t_stimulateV: V_sh->is_leaf() = true");
-            double leaf_value;
-            double expand_count = 0.0;
-            double is_end;
-
-            // If game is not done, then expand node and roll-out to get the intermidate reward
-            if (!done) {
-                // py::print("\tGame is not done, expand node and roll-out");
-                is_end = 0.0;
-
-                py::list legal_actions_list = simulate_env.attr("legal_actions").cast<py::list>();
-                std::vector<int> legal_actions = legal_actions_list.cast<std::vector<int>>();                
-                
-                leaf_value = _expand_leaf_node(V_sh, Q_sh, legal_actions, simulate_env, policy_value_func);
-
-                // Rescale leaf_value from [-1; 1] to [0; 1]
-                leaf_value = std::max(0.0, (leaf_value + 1.0) / 2.0);
-                // py::print("\tleaf_value (scale as [0; 1]):", leaf_value);
-                
-                // Update V_sh
-                V_sh->value = leaf_value;
-                V_sh->visit_count++;                          
-            } else { 
-                // py::print("\tGame is done");              
-                is_end = 1.0;
-
-                // Else, then get the game result
-                if (winner == -1) {
-                    leaf_value = 0;
-                } else {
-                    leaf_value = (simulate_env.attr("current_player").cast<int>() == winner) ? 1 : -1;
-                }
-
-                // Rescale leaf_value from [-1; 1] to [0; 1]
-                leaf_value = std::max(0.0, (leaf_value + 1.0) / 2.0);
-                // Swap leaf_value
-                leaf_value = 1.0 - leaf_value;
-                
-                // py::print("\tleaf_value (scale as [0; 1]):", leaf_value);
-                // Update the node
-                V_sh->value = leaf_value;
-                V_sh->visit_count++;                
-            }
-
-            std::map<int, double> result;
-            result[0] = leaf_value;
-            result[1] = expand_count;
-            result[2] = is_end;
-
-            return result; 
-        }
+        double leaf_value;
         
         // Select next action
         int action;
@@ -410,13 +344,10 @@ private:
         std::shared_ptr<Node> Q_sh_a = nullptr;
         
         std::tie(action, V_sh_plus_1, Q_sh_a) = _select_child(V_sh, Q_sh, simulate_env, policy_value_func);
-        // py::print("\tAction selected:", action);
-
-        // Apply action to env
-        simulate_env.attr("step")(action);
+        // py::print("\tAction selected:", action, "\n");
 
         // StimulateQ
-        std::map<int, double> result = _simulateQ(action, V_sh_plus_1, Q_sh_a, V_sh_2, Q_sh_2, simulate_env, policy_value_func);
+        leaf_value = _simulateQ(action, V_sh_plus_1, Q_sh_a, V_sh_2, Q_sh_2, simulate_env, policy_value_func);
         
         // Update V node
         // py::print("\tUpdating V_node...");
@@ -438,69 +369,71 @@ private:
         // py::print("\tupdated V_sh->value:", V_sh->value);
         // py::print("\tupdated V_sh->visit_count:", V_sh->visit_count);
         // py::print("\t-------------------------------------------------------------------------------------------------------------------------");
-        return result;
+        return leaf_value;
     }
 
-    std::map<int, double> _simulateQ(int action, std::shared_ptr<Node> V_sh_plus_1, std::shared_ptr<Node> Q_sh_a, std::shared_ptr<Node> V_sh_2, std::shared_ptr<Node> Q_sh_2, py::object simulate_env, py::object policy_value_func) {
-        // py::print("\t------------------------------------------------------STIMULATE Q------------------------------------------------------");                
-        
-        // ----------------------------------------------------------------------------- 
-        // Should get legal action before run _simulateV of next player :vv
-        py::list legal_actions_list = simulate_env.attr("legal_actions").cast<py::list>();
-        std::vector<int> legal_actions = legal_actions_list.cast<std::vector<int>>();
-        // py::print("\tLegal action to expand (if needed):", legal_actions);
+    double _simulateQ(int action, std::shared_ptr<Node> V_sh_plus_1, std::shared_ptr<Node> Q_sh_a, std::shared_ptr<Node> V_sh_2, std::shared_ptr<Node> Q_sh_2, py::object simulate_env, py::object policy_value_func) {
+        // py::print("\t------------------------------------------------------STIMULATE Q", simulate_env.attr("current_player").cast<int>(), "------------------------------------------------------");                
+        double leaf_value;
+        if (action != -1) {
+            // Apply action to env
+            simulate_env.attr("step")(action);
 
-        // Player 2's turn
-        // py::print("V_sh_2:", V_sh_2);
-        // py::print("V_sh_2->is_leaf():", V_sh_2->is_leaf());
-        // py::print("V_sh_2->children:", V_sh_2->children, "\n");
-        
-        // py::print("Q_sh_2:", Q_sh_2);
-        // py::print("Q_sh_2->is_leaf():", Q_sh_2->is_leaf());
-        // py::print("Q_sh_2->children:", Q_sh_2->children);        
-        std::map<int, double> result = _simulateV(V_sh_2, Q_sh_2, V_sh_plus_1, Q_sh_a, simulate_env, policy_value_func);
-        
-        // Dispatch returned data
-        double leaf_value = result[0];
-        double expand_count = result[1];
-        double is_end = result[2];
-        // py::print("\tDispatching returned data...");
-        // py::print("\tleaf_value:", leaf_value);
-        // py::print("\texpand_count:", expand_count);
-        // py::print("\tis_end:", is_end, "\n");
-
-        // Swap the leaf_value 
-        leaf_value = 1.0 - leaf_value;
-        // py::print("\tswapped leaf_value:", leaf_value);      
-
-        // If expand_count == 0.0 and game is not end yet (is_end == 0.0), then expand node, otherwise just keep the node intact :vv. 
-        if ((expand_count == 0.0) && (is_end == 0.0)) {
-            // py::print("\texpand_coun == 0.0, game is not end yet (is_end == 0.0), EXPAND NODE");
-            // Expand node
-            _expand_leaf_node(V_sh_plus_1, Q_sh_a, legal_actions, simulate_env, policy_value_func);   
+            // Continue to select
+            leaf_value = _simulateV(V_sh_2, Q_sh_2, V_sh_plus_1, Q_sh_a, simulate_env, policy_value_func);
             
-            // Update node
-            V_sh_plus_1->value = leaf_value;
-            V_sh_plus_1->visit_count++;
+            // Swap the returned leaf_value
+            leaf_value = 2.0 - leaf_value;
+        } else if (action == -1) {
+            // Check if game is finished and get the reward
+            bool done;
+            int winner;
 
-            expand_count++;
-        } else if ((expand_count == 0.0) && (is_end == 1.0)) {
-            // Update node
-            V_sh_plus_1->value = leaf_value;
-            V_sh_plus_1->visit_count++;
+            py::tuple game_result = simulate_env.attr("get_done_winner")();
+            done = game_result[0].cast<bool>();
+            winner = game_result[1].cast<int>();
 
-            expand_count++;
+            if (!done) {
+                // Then extend node
+                leaf_value = _expand_leaf_node(V_sh_plus_1, Q_sh_a, simulate_env, policy_value_func);
+
+                // Re-scale leaf_value
+                // leaf_value = std::max(0.0, (leaf_value + 1.0) / 2.0);
+                leaf_value = leaf_value + 1.0;
+
+                // Update node
+                V_sh_plus_1->value = leaf_value;
+                V_sh_plus_1->visit_count++; 
+            } else {
+                std::string battle_mode = simulate_env.attr("battle_mode_in_simulation_env").cast<std::string>();
+                if (battle_mode == "self_play_mode") {
+                    if (winner == -1) {
+                        leaf_value = 0;
+                    } else {
+                        leaf_value = (simulate_env.attr("current_player").cast<int>() == winner) ? 1 : -1;
+                    }
+                }
+
+                // Re-scale leaf_value
+                // leaf_value = std::max(0.0, (leaf_value + 1.0) / 2.0);
+                leaf_value = leaf_value + 1.0;
+
+                // Update node
+                V_sh_plus_1->value = leaf_value;
+                V_sh_plus_1->visit_count++; 
+            }
         }
 
         // Update Q node
+        // py::print("Updating Q node...");
+
         Q_sh_a->value = (Q_sh_a->value * Q_sh_a->visit_count + leaf_value + gamma * V_sh_plus_1->value) / (Q_sh_a->visit_count + 1);
         Q_sh_a->visit_count++;
-      
-        result[0] = leaf_value;
-        result[1] = expand_count;
-        result[2] = is_end;
-
-        return result;
+        // py::print("Updated Q_sh_a->value:", Q_sh_a->value);
+        // py::print("Updated Q_sh_a->visit_count:", Q_sh_a->visit_count);
+        
+        // py::print("\t-------------------------------------------------------------------------------------------------------------------------");
+        return leaf_value;
     }
     
 private:
@@ -579,18 +512,18 @@ PYBIND11_MODULE(mcts_alphazero, m) {
     // Bind the MCTS class
     py::class_<MCTS>(m, "MCTS")
         .def(py::init<int, int, double, double, double, double, py::object, float, float>(),
-             py::arg("max_moves")=512, py::arg("num_simulations")=800,
-             py::arg("pb_c_base")=19652, py::arg("pb_c_init")=1.25,
-             py::arg("root_dirichlet_alpha")=0.3, py::arg("root_noise_weight")=0.25, py::arg("simulate_env"),
-             py::arg("gamma")=0.99, py::arg("p")=1.5)
+            py::arg("max_moves")=512, py::arg("num_simulations")=800,
+            py::arg("pb_c_base")=19652, py::arg("pb_c_init")=1.25,
+            py::arg("root_dirichlet_alpha")=0.3, py::arg("root_noise_weight")=0.25, py::arg("simulate_env"),
+            py::arg("gamma")=0.99, py::arg("p")=1.5)
         .def("get_next_action", &MCTS::get_next_action)
         .def("_expand_leaf_node", &MCTS::_expand_leaf_node)
         .def_property("simulate_env", &MCTS::get_simulate_env, &MCTS::set_simulate_env)
         .def_property_readonly("pb_c_base", &MCTS::get_pb_c_base)
         .def_property_readonly("pb_c_init", &MCTS::get_pb_c_init)
         .def("get_next_action", &MCTS::get_next_action,
-             py::arg("state_config_for_env_reset"),
-             py::arg("policy_value_func"),
-             py::arg("temperature"),
-             py::arg("sample"));
+            py::arg("state_config_for_env_reset"),
+            py::arg("policy_value_func"),
+            py::arg("temperature"),
+            py::arg("sample"));
 }
