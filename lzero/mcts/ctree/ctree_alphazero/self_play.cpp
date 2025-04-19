@@ -383,7 +383,7 @@ private:
             leaf_value = _simulateV(V_sh_2, Q_sh_2, V_sh_plus_1, Q_sh_a, simulate_env, policy_value_func);
             
             // Swap the returned leaf_value
-            leaf_value = 2.0 - leaf_value;
+            leaf_value = 1.0 - leaf_value;
         } else if (action == -1) {
             // Check if game is finished and get the reward
             bool done;
@@ -398,8 +398,8 @@ private:
                 leaf_value = _expand_leaf_node(V_sh_plus_1, Q_sh_a, simulate_env, policy_value_func);
 
                 // Re-scale leaf_value
-                // leaf_value = std::max(0.0, (leaf_value + 1.0) / 2.0);
-                leaf_value = leaf_value + 1.0;
+                leaf_value = std::max(0.0, (leaf_value + 1.0) / 2.0);
+                // leaf_value = leaf_value + 1.0;
 
                 // Update node
                 V_sh_plus_1->value = leaf_value;
@@ -415,8 +415,8 @@ private:
                 }
 
                 // Re-scale leaf_value
-                // leaf_value = std::max(0.0, (leaf_value + 1.0) / 2.0);
-                leaf_value = leaf_value + 1.0;
+                leaf_value = std::max(0.0, (leaf_value + 1.0) / 2.0);
+                // leaf_value = leaf_value + 1.0;
 
                 // Update node
                 V_sh_plus_1->value = leaf_value;
