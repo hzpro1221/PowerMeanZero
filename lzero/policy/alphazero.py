@@ -312,7 +312,7 @@ class AlphaZeroPolicy(Policy):
         Returns:
             - output (:obj:`Dict[str, torch.Tensor]`): The dict of output, the key is env_id and the value is the \
                 the corresponding policy output in this timestep, including action, probs and so on.
-        """
+        """        
         ready_env_id = list(obs.keys())
         init_state = {env_id: obs[env_id]['board'] for env_id in ready_env_id}
         # If 'katago_game_state' is in the observation of the given environment ID, it's value is used.
@@ -320,16 +320,18 @@ class AlphaZeroPolicy(Policy):
         # This approach is taken to maintain compatibility with the handling of 'katago' related parts of 'alphazero_mcts_ctree' in Go.
         katago_game_state = {env_id: obs[env_id].get('katago_game_state', None) for env_id in ready_env_id}
         start_player_index = {env_id: obs[env_id]['current_player_index'] for env_id in ready_env_id}
-        output = {}
+        output = {}        
         self._policy_model = self._eval_model
         for env_id in ready_env_id:
             state_config_for_simulation_env_reset = EasyDict(dict(start_player_index=start_player_index[env_id],
                                                                   init_state=init_state[env_id],
                                                                   katago_policy_init=False,
                                                                   katago_game_state=katago_game_state[env_id]))
+
             action, mcts_probs, root = self._eval_mcts.get_next_action(
                 state_config_for_simulation_env_reset, self._policy_value_fn, 1.0, False
             )
+            
             output[env_id] = {
                 'action': action,
                 'probs': mcts_probs,

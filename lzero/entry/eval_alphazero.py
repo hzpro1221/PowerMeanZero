@@ -45,7 +45,7 @@ def eval_alphazero(
         cfg.policy.device = 'cuda'
     else:
         cfg.policy.device = 'cpu'
-
+    
     cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
     # Create main components: env, policy
     env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)

@@ -5,16 +5,20 @@
 #include <string>
 #include <memory>
 #include <iostream>
+#include <vector>
 
 class Node : public std::enable_shared_from_this<Node> {
 public:
     // Parent and child nodes are managed using shared_ptr
     std::shared_ptr<Node> parent;
     std::map<int, std::shared_ptr<Node>> children;
+    
+    std::vector<int> opp_mov;
+    std::map<int, double> prior_p; // The prior probability of the node
 
     // Constructor
-    Node(std::shared_ptr<Node> parent = nullptr, float prior_p = 1.0)
-        : parent(parent), prior_p(prior_p), visit_count(0), value(0.0) {}
+    Node(std::shared_ptr<Node> parent = nullptr)
+        : parent(parent), visit_count(0), value(0.0) {}
 
     // Default destructor
     ~Node() = default;
@@ -29,7 +33,6 @@ public:
         return parent == nullptr;
     }
 
-    float prior_p;        // The prior probability of the node
     int visit_count;      // Visit count
     float value;      // Value sum
 };
