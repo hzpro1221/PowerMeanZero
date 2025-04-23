@@ -1445,6 +1445,7 @@ events.*
 !lzero/mcts/ctree/ctree_alphazero/mcts_alphazero.cpp
 !lzero/mcts/ctree/ctree_alphazero/node_alphazero.cpp
 !lzero/mcts/ctree/ctree_alphazero/self_play.cpp
+!lzero/mcts/ctree/ctree_alphazero/self_play_v2.cpp
 **/tb/*
 **/mcts/ctree/tests_cpp/*
 **/*tmp*
