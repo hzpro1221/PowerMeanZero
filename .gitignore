@@ -1446,6 +1446,13 @@ events.*
 !lzero/mcts/ctree/ctree_alphazero/node_alphazero.cpp
 !lzero/mcts/ctree/ctree_alphazero/self_play.cpp
 !lzero/mcts/ctree/ctree_alphazero/self_play_v2.cpp
+!lzero/mcts/ctree/ctree_alphazero/1-mcts.cpp
+!lzero/mcts/ctree/ctree_alphazero/1-node.cpp
+!lzero/mcts/ctree/ctree_alphazero/1-node.h
+!lzero/mcts/ctree/ctree_alphazero/2-mcts.cpp
+!lzero/mcts/ctree/ctree_alphazero/2-node.cpp
+!lzero/mcts/ctree/ctree_alphazero/2-node.h
+
 **/tb/*
 **/mcts/ctree/tests_cpp/*
 **/*tmp*

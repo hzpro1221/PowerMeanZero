@@ -131,6 +131,7 @@ private:
         py::list legal_actions_list = simulate_env.attr("legal_actions").cast<py::list>();
         std::vector<int> legal_actions = legal_actions_list.cast<std::vector<int>>();
         // Add child nodes for legal actions
+        if (std::find(Q_sh->opp_mov.begin(), Q_sh->opp_mov.end(), opp_mov) == Q_sh->opp_mov.end()) {
         for (const auto& kv : action_probs_dict) {
             int action = kv.first;
                 double prior_p = kv.second;
@@ -154,7 +155,6 @@ private:
                 }
             }
             
-        if (std::find(Q_sh->opp_mov.begin(), Q_sh->opp_mov.end(), opp_mov) == Q_sh->opp_mov.end()) {
             Q_sh->opp_mov.push_back(opp_mov);
             V_sh->opp_mov.push_back(opp_mov); 
         }
@@ -307,13 +307,13 @@ private:
             _add_exploration_noise(-1, V_root);
             _add_exploration_noise(-1, Q_root);
         }
-        // py::list legal_actions_py = simulate_env.attr("legal_actions").cast<py::list>();
+        py::list legal_actions_py = simulate_env.attr("legal_actions").cast<py::list>();
             
-        // std::vector<int> legal_actions;
-        // for (py::handle h : legal_actions_py) {
-        //     legal_actions.push_back(h.cast<int>());
-        // }
-        // py::print("legal_actions:", legal_actions);
+        std::vector<int> legal_actions;
+        for (py::handle h : legal_actions_py) {
+            legal_actions.push_back(h.cast<int>());
+        }
+        py::print("legal_actions:", legal_actions);
         
         simulate_env.attr("reset")(
             state_config_for_env_reset["start_player_index"].cast<int>(),
@@ -322,11 +322,11 @@ private:
             katago_game_state
         );
 
-        // py::print("player:", simulate_env.attr("current_player").cast<int>());
+        py::print("player:", simulate_env.attr("current_player").cast<int>());
 
         // Run MCTS simulations
         for (int n = 1; n < num_simulations; ++n) {
-            // py::print("-----------------------------------NUM STIMULATION:", n, "-----------------------------------"); 
+            py::print("-----------------------------------NUM STIMULATION:", n, "-----------------------------------"); 
             simulate_env.attr("reset")(
                 state_config_for_env_reset["start_player_index"].cast<int>(),
                 init_state,
@@ -335,7 +335,7 @@ private:
             );
 
             _simulateV(-1, V_root, Q_root, V_root_2, Q_root_2, simulate_env, policy_value_func);
-            // py::print("-------------------------------------------------------------------------------------------");
+            py::print("-------------------------------------------------------------------------------------------");
         }
 
         // Collect visit counts from the root's children
@@ -369,14 +369,14 @@ private:
             action_selected = actions[std::distance(action_probs.begin(), std::max_element(action_probs.begin(), action_probs.end()))];
         }
 
-        // py::print("Action Selected:", action_selected, "Action Probabilities:", action_probs, "\n");
+        py::print("Action Selected:", action_selected, "Action Probabilities:", action_probs, "\n");
         // Return the selected action, action probabilities, and root node
         return std::make_tuple(action_selected, action_probs, Q_root);
     }
 
     // Simulate a game starting from a given node
     double _simulateV(int opp_mov, std::shared_ptr<Node> V_sh, std::shared_ptr<Node> Q_sh, std::shared_ptr<Node> V_sh_2, std::shared_ptr<Node> Q_sh_2, py::object simulate_env, py::object policy_value_func) {
-        // py::print("\t------------------------------------------------------STIMULATE V", simulate_env.attr("current_player").cast<int>(), "------------------------------------------------------");
+        py::print("\t------------------------------------------------------STIMULATE V", simulate_env.attr("current_player").cast<int>(), "------------------------------------------------------");
         double leaf_value;
         
         // Select next action
@@ -385,8 +385,8 @@ private:
         std::shared_ptr<Node> Q_sh_a = nullptr;
         
         std::tie(selected_action, V_sh_plus_1, Q_sh_a) = _select_child(opp_mov, V_sh, Q_sh, simulate_env, policy_value_func);
-        // py::print("opp_mov:", opp_mov);
-        // py::print("\tAction selected:", selected_action, "\n");
+        py::print("opp_mov:", opp_mov);
+        py::print("\tAction selected:", selected_action, "\n");
 
         // StimulateQ
         leaf_value = _simulateQ(selected_action, V_sh_plus_1, Q_sh_a, V_sh_2, Q_sh_2, simulate_env, policy_value_func);
@@ -408,14 +408,14 @@ private:
             // py::print("\t\tCurrent V_sh->value:", V_sh->value, "\n");
         }
         V_sh->value = pow(V_sh->value, 1 / p);
-        // py::print("\tupdated V_sh->value:", V_sh->value);
-        // py::print("\tupdated V_sh->visit_count:", V_sh->visit_count);
-        // py::print("\t-------------------------------------------------------------------------------------------------------------------------");
+        py::print("\tupdated V_sh->value:", V_sh->value);
+        py::print("\tupdated V_sh->visit_count:", V_sh->visit_count);
+        py::print("\t-------------------------------------------------------------------------------------------------------------------------");
         return leaf_value;
     }
 
     double _simulateQ(int selected_action, std::shared_ptr<Node> V_sh_plus_1, std::shared_ptr<Node> Q_sh_a, std::shared_ptr<Node> V_sh_2, std::shared_ptr<Node> Q_sh_2, py::object simulate_env, py::object policy_value_func) {
-        // py::print("\t------------------------------------------------------STIMULATE Q", simulate_env.attr("current_player").cast<int>(), "------------------------------------------------------");                
+        py::print("\t------------------------------------------------------STIMULATE Q", simulate_env.attr("current_player").cast<int>(), "------------------------------------------------------");                
         int current_player = simulate_env.attr("current_player").cast<int>();
 
         // Apply action to env
@@ -463,15 +463,15 @@ private:
         }
 
         // Update Q node
-        // py::print("Updating Q node...");
-        // py::print("leaf_value:", leaf_value);
+        py::print("Updating Q node...");
+        py::print("leaf_value:", leaf_value);
 
         Q_sh_a->value = (Q_sh_a->value * Q_sh_a->visit_count + leaf_value + gamma * V_sh_plus_1->value) / (Q_sh_a->visit_count + 1);
         Q_sh_a->visit_count++;
-        // py::print("Updated Q_sh_a->value:", Q_sh_a->value);
-        // py::print("Updated Q_sh_a->visit_count:", Q_sh_a->visit_count);
+        py::print("Updated Q_sh_a->value:", Q_sh_a->value);
+        py::print("Updated Q_sh_a->visit_count:", Q_sh_a->visit_count);
         
-        // py::print("\t-------------------------------------------------------------------------------------------------------------------------");
+        py::print("\t-------------------------------------------------------------------------------------------------------------------------");
         return leaf_value;
     }
     
