@@ -9,11 +9,11 @@ wandb.init(project="AlphaZero_TicTacToe", name="test3", sync_tensorboard=True)
 # ==============================================================
 collector_env_num = 8
 n_episode = 8
-evaluator_env_num = 100
+evaluator_env_num = 5
 num_simulations = 25
 update_per_collect = 50
 batch_size = 256
-max_env_step = 10000
+max_env_step = int(2e5)
 mcts_ctree = True
 # ==============================================================
 # end of the most frequently changed config specified by the user
@@ -37,7 +37,7 @@ tictactoe_alphazero_config = dict(
         scale=True,
         alphazero_mcts_ctree=mcts_ctree,
         save_replay_gif=False,
-        replay_path_gif='./replay_gif'
+        replay_path_gif='./replay_gif',
         # ==============================================================
     ),
     policy=dict(
@@ -67,7 +67,7 @@ tictactoe_alphazero_config = dict(
         value_weight=1.0,
         entropy_weight=0.0,
         n_episode=n_episode,
-        eval_freq=200,
+        eval_freq=int(2e3),
         mcts=dict(num_simulations=num_simulations),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -102,4 +102,3 @@ create_config = tictactoe_alphazero_create_config
 if __name__ == '__main__':
     from lzero.entry import train_alphazero, eval_alphazero
     # eval_alphazero([main_config, create_config], seed=0)
-    train_alphazero([main_config, create_config], seed=0, max_env_step=max_env_step)

@@ -38,6 +38,7 @@ public:
 
     int visit_count;      // Visit count
     double value;      // Value
+    int flag;          // For debugging with 0 for lose, 1 for draw, 2 for win, 3 if extended
 };
 
 #endif // NODE_ALPHAZERO_H

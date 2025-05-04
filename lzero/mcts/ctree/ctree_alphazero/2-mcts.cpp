@@ -10,6 +10,8 @@
 #include <iostream>
 #include <memory>
 #include <numeric>
+#include <sstream>
+#include <iomanip>
 
 namespace py = pybind11;
 
@@ -36,8 +38,8 @@ class MCTS {
          double root_dirichlet_alpha=0.3, 
          double root_noise_weight=0.25, 
          py::object simulate_env=py::none(),
-         double c=1.25,
-         double p=1.5,
+         double c=2.5,
+         double p=3,
          double gamma=0.95)
         : max_moves(max_moves), num_simulations(num_simulations),
           pb_c_base(pb_c_base), pb_c_init(pb_c_init),
@@ -136,18 +138,36 @@ class MCTS {
                     if (Q_sh->children.find(action) != Q_sh->children.end()) {
                         Q_sh->children[action]->prior_p[opp_mov] = prior_p; 
                     } else {
-                        V_sh->children[action] = std::make_shared<Node>(Q_sh);
+                        V_sh->children[action] = std::make_shared<Node>(V_sh);
                         Q_sh->children[action] = std::make_shared<Node>(Q_sh);
                                                 
                         Q_sh->children[action]->prior_p[opp_mov] = prior_p;
-
-                        // Update newly created node
-                        V_sh->visit_count++;
-                        V_sh->value = (leaf_value + 1.0) / 2.0;
                     }
                 }
             }
             Q_sh->opp_mov.push_back(opp_mov);            
+        }
+
+        // Check if there is any action in legal action list that not being expanded yet
+        // Get the legal actions from the simulation environment
+        py::list legal_actions_list = simulate_env.attr("legal_actions").cast<py::list>();
+        std::vector<int> legal_actions = legal_actions_list.cast<std::vector<int>>();
+        for (size_t i = 0; i < legal_actions.size(); ++i) {
+            int action = legal_actions[i];
+
+            // If action hasn't explored, then expand it
+            if (Q_sh->children.find(action) == Q_sh->children.end()) {
+
+                py::tuple result = policy_value_func(simulate_env);
+                std::map<int, double> action_probs_dict = result[0].cast<std::map<int, double>>();
+                double leaf_value = result[1].cast<double>();
+
+                V_sh->children[action] = std::make_shared<Node>(V_sh);
+                Q_sh->children[action] = std::make_shared<Node>(Q_sh);
+
+                // Use action_probs_dict for prior probability
+                Q_sh->children[action]->prior_p[opp_mov] = action_probs_dict[action];
+            }
         }
 
         // Iterate through all children
@@ -161,7 +181,17 @@ class MCTS {
 
             // Check if the action is legal and calculate UCB score
             if (std::find(legal_actions.begin(), legal_actions.end(), action_tmp) != legal_actions.end()) {
+                // If the prior probability for opp_mov hasn't been initialized yet, initialize it now
+                if (Q_sh_a_tmp->prior_p[opp_mov] == 0) {
+                    py::tuple result = policy_value_func(simulate_env);
+                    std::map<int, double> action_probs_dict = result[0].cast<std::map<int, double>>();
+                    double leaf_value = result[1].cast<double>();
+                    
+                    Q_sh_a_tmp->prior_p[opp_mov] = action_probs_dict[action_tmp];
+                }
+
                 double score = _ucb_score(opp_mov, V_sh, Q_sh_a_tmp);
+
                 if (score > best_score) {
                     best_score = score;
                     action = action_tmp;
@@ -246,6 +276,14 @@ class MCTS {
             _add_exploration_noise(Q_root);
         }
 
+        py::list legal_actions_py = simulate_env.attr("legal_actions").cast<py::list>();
+
+        std::vector<int> legal_actions;
+        for (py::handle h : legal_actions_py) {
+            legal_actions.push_back(h.cast<int>());
+        }
+        // py::print("legal_actions:", legal_actions);
+
         // Run MCTS simulations
         for (int n = 0; n < num_simulations; ++n) {
             simulate_env.attr("reset")(
@@ -256,6 +294,15 @@ class MCTS {
             );
             simulate_env.attr("battle_mode") = simulate_env.attr("battle_mode_in_simulation_env");
             _simulateV(-1, V_root, Q_root, V_root_2, Q_root_2, simulate_env, policy_value_func);
+
+            // Export the tree structure
+            // exportToDot(-1, "/content/tree_player_1.dot", V_root, Q_root);
+            // std::string command = "dot -Tpng -Gdpi=300 /content/tree_player_1.dot -o /content/log_v2/tree_player_1_tree_legal_ac_len_" + std::to_string(legal_actions.size()) + "_num_sti_" + std::to_string(n) + ".png";
+            // int ret = std::system(command.c_str());        
+
+            // exportToDot(-1, "/content/tree_player_2.dot", V_root_2, Q_root_2);
+            // std::string command2 = "dot -Tpng -Gdpi=300 /content/tree_player_2.dot -o /content/log_v2/tree_player_2_tree_legal_ac_len_" + std::to_string(legal_actions.size()) + "_num_sti_" + std::to_string(n) + ".png";
+            // int ret2 = std::system(command2.c_str());                    
         }
 
         // Collect visit counts from the root's children
@@ -286,6 +333,9 @@ class MCTS {
         else {
             action_selected = actions[std::distance(action_probs.begin(), std::max_element(action_probs.begin(), action_probs.end()))];
         }
+
+        // py::print("action_probs:", action_probs);
+        // py::print("action_selected:", action_selected, "\n");
         // Return the selected action, action probabilities, and root node
         return std::make_tuple(action_selected, action_probs, Q_root);
     }
@@ -311,7 +361,14 @@ class MCTS {
 
             tmp += ((double) Q_sh_a_tmp->visit_count / V_sh->visit_count) * pow(Q_sh_a_tmp->value, p);
         }        
-        V_sh->value = pow(tmp, 1/p);
+        
+        // for p = 1
+        // V_sh->value = pow(tmp, 1/p);
+        if (p == 1.0) {
+            V_sh->value = tmp;
+        } else if (p == 3.0) {
+            V_sh->value = std::cbrt(tmp);
+        }
         return leaf_value;
     }
 
@@ -333,34 +390,173 @@ class MCTS {
                 leaf_value = _expand_leaf_node(opp_mov, V_sh_plus_1, Q_sh_a, simulate_env, policy_value_func);
                 
                 // Rescale leaf_value
-                leaf_value = (leaf_value + 1) / 2;
+                // leaf_value = (leaf_value + 1) / 2;
 
                 // Update V_sh_plus_1
                 V_sh_plus_1->visit_count++;
                 V_sh_plus_1->value = leaf_value; 
+                V_sh_plus_1->flag = 3;
+
+                // Also update for V_sh_2
+                V_sh_2->visit_count++;
+                V_sh_2->value = 0.0 - leaf_value; 
+                V_sh_2->flag = -1;                
             } else {
-                leaf_value = 1.0 - _simulateV(action, V_sh_2, Q_sh_2, V_sh_plus_1, Q_sh_a, simulate_env, policy_value_func);
+                leaf_value = 0.0 - _simulateV(action, V_sh_2, Q_sh_2, V_sh_plus_1, Q_sh_a, simulate_env, policy_value_func);
+                V_sh_plus_1->flag = -1;            
             }
         } else {
             if (winner == -1) {
                 leaf_value = 0;
+
+                V_sh_plus_1->flag = 0;
+                V_sh_2->flag = 0;
             } else {
                 leaf_value = (simulate_env.attr("current_player").cast<int>() == winner) ? -1 : 1;
+                
+                if (leaf_value == -1) {
+                    V_sh_plus_1->flag = 1;
+                    V_sh_2->flag = 2;
+                } else {
+                    V_sh_plus_1->flag = 2;
+                    V_sh_2->flag = 1;
+                }            
             }
 
             // Re-scale leaf_value
-            leaf_value = (leaf_value + 1) / 2;
+            // leaf_value = (leaf_value + 1) / 2;
 
             // Update V_sh_plus_1
             V_sh_plus_1->visit_count++;
-            V_sh_plus_1->value = leaf_value;            
+            V_sh_plus_1->value = leaf_value;    
+            
+            // Also update for V_sh_2
+            V_sh_2->visit_count++;
+            V_sh_2->value = 0.0 - leaf_value; 
         }
-        
+
         Q_sh_a->value = (Q_sh_a->value * Q_sh_a->visit_count + leaf_value + gamma * V_sh_plus_1->value) / (Q_sh_a->visit_count + 1);
         Q_sh_a->visit_count = Q_sh_a->visit_count + 1;
         return leaf_value;
     }    
+
+    void writeNode(int action, FILE* file, std::shared_ptr<Node> V_root, std::shared_ptr<Node> Q_root, 
+                std::unordered_map<std::shared_ptr<Node>, int>& nodeToId, int& nextId) {
+        
+        if (nodeToId.find(V_root) == nodeToId.end()) {
+            nodeToId[V_root] = nextId++;
+        }
+        int nodeId = nodeToId[V_root];
+
+        // Calculate a smoother fill color based on visit_count (for a more pleasant color scale)
+        double max_visit = num_simulations;  // Set a reasonable max visit count to normalize the color scaling
+        double norm_visit = std::min(1.0, (double)V_root->visit_count / max_visit);  // Normalize visit count
+
+        // Create a gradient from light blue to dark blue based on visit_count
+        int red = static_cast<int>(255 * (1 - norm_visit)); // Fade from blue to red as visit_count increases
+        int green = static_cast<int>(255 * (1 - norm_visit)); // Keep green minimal for contrast
+        int blue = static_cast<int>(255 * norm_visit); // Fade to blue as count increases
+
+        char fillColorStr[16];
+        // Convert to hexadecimal color code for fill color
+        snprintf(fillColorStr, sizeof(fillColorStr), "#%02X%02X%02X", red, green, blue);
+        
+        // Write node information with fill color and smooth transitions
+        double penwidth = 1.0 + (double)V_root->visit_count * 0.02; // Adjust thickness based on visit count
+        if (V_root->flag == -1) {
+            fprintf(file, "    %d [label=\"Ac: %d\nvisit:%.0f\", fontsize=8, width=0.6, height=0.6, fixedsize=true, "
+                "penwidth=%.2f, color=\"black\", fillcolor=\"%s\", style=filled];\n",
+                nodeId, action, (double)V_root->visit_count, penwidth, fillColorStr);
+        } else if (V_root->flag == 0) {
+            // For debugging: 0 = lose
+            fprintf(file, "    %d [label=\"LOSE\\nAc: %d\\nvisit:%.0f\", fontsize=8, width=0.6, height=0.6, fixedsize=true, "
+                "penwidth=%.2f, color=\"black\", fillcolor=\"#FFAAAA\", style=filled];\n",
+                nodeId, action, (double)V_root->visit_count, penwidth);
     
+        } else if (V_root->flag == 1) {
+            // For debugging: 1 = draw
+            fprintf(file, "    %d [label=\"DRAW\\nAc: %d\\nvisit:%.0f\", fontsize=8, width=0.6, height=0.6, fixedsize=true, "
+                "penwidth=%.2f, color=\"black\", fillcolor=\"#AAAAFF\", style=filled];\n",
+                nodeId, action, (double)V_root->visit_count, penwidth);
+    
+        } else if (V_root->flag == 2) {
+            // For debugging: 2 = win
+            fprintf(file, "    %d [label=\"WIN\\nAc: %d\\nvisit:%.0f\", fontsize=8, width=0.6, height=0.6, fixedsize=true, "
+                "penwidth=%.2f, color=\"black\", fillcolor=\"#AAFFAA\", style=filled];\n",
+                nodeId, action, (double)V_root->visit_count, penwidth);
+    
+        } else if (V_root->flag == 3) {
+            // For debugging: 3 = extended
+            fprintf(file, "    %d [label=\"EXT\\nAc: %d\\nvisit:%.0f\", fontsize=8, width=0.6, height=0.6, fixedsize=true, "
+                "penwidth=%.2f, color=\"black\", fillcolor=\"#FFFFAA\", style=filled];\n",
+                nodeId, action, (double)V_root->visit_count, penwidth);
+        }
+
+        for (const auto& kv : Q_root->children) {
+            int action_tmp = kv.first;
+            std::shared_ptr<Node> Q_sh_a_tmp = kv.second;
+
+            if (V_root->children.find(action_tmp) == V_root->children.end()) {
+                continue;
+            }
+
+            std::shared_ptr<Node> V_sh_plus_1 = V_root->children[action_tmp];
+
+            if (nodeToId.find(V_sh_plus_1) == nodeToId.end()) {
+                nodeToId[V_sh_plus_1] = nextId++;
+            }
+
+            if (V_sh_plus_1->is_leaf() && (V_sh_plus_1->visit_count == 0)) {
+                continue;
+            }
+
+            int childId = nodeToId[V_sh_plus_1];
+
+            double q_value = std::max(0.0, Q_sh_a_tmp->value);  // Clamp negative values to 0
+
+            double penwidth = 2.0 + q_value;
+            int red = std::min(255, static_cast<int>(q_value * 20));
+            int green = 255 - red;
+            int blue = 255 - red;
+
+            char colorStr[16];
+            snprintf(colorStr, sizeof(colorStr), "#%02X%02X%02X", red, green, blue);
+            
+            std::ostringstream prior_p_stream;
+            for (const auto& [action, prob] : Q_sh_a_tmp->prior_p) {
+                prior_p_stream << action << ": " << std::fixed << std::setprecision(2) << prob << "\\n";
+            }
+            std::string prior_p_str = prior_p_stream.str();
+            
+            // Write edge information
+            fprintf(file, "    %d -> %d [label=\"Q_val: %.2f\nprior_p: %s\", penwidth=%.2f, color=\"%s\", style=bold];\n",
+                nodeId, childId, Q_sh_a_tmp->value, prior_p_str.c_str(), penwidth, colorStr);
+
+            // Recursively write child node
+            writeNode(action_tmp, file, V_sh_plus_1, Q_sh_a_tmp, nodeToId, nextId);
+        }
+    }
+
+    void exportToDot(int action, const std::string& filename, std::shared_ptr<Node> V_root, std::shared_ptr<Node> Q_root) {
+        FILE* file = fopen(filename.c_str(), "w");
+        if (!file) {
+            std::cerr << "Failed to open file: " << filename << std::endl;
+            return;
+        }
+
+        // Global graph settings for compact layout
+        fprintf(file, "digraph MCTS {\n");
+        fprintf(file, "    node [shape=circle, style=filled, fillcolor=lightgrey, fontsize=10, width=0.5, height=0.5, fixedsize=true];\n");
+        fprintf(file, "    edge [fontsize=8];\n");
+
+        std::unordered_map<std::shared_ptr<Node>, int> nodeToId;
+        int nextId = 0;
+
+        writeNode(action, file, V_root, Q_root, nodeToId, nextId);
+
+        fprintf(file, "}\n");
+        fclose(file);
+    } 
 
 private:
     // Helper: Convert visit counts to action probabilities using temperature

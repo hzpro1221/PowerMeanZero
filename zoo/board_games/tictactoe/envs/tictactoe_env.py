@@ -255,6 +255,22 @@ class TicTacToeEnv(BaseEnv):
 
             return timestep
         elif self.battle_mode == 'eval_mode':
+            if (action == -1000):
+                bot_action = self.bot_action()
+                timestep_player2 = self._player_step(bot_action, "bot")
+                if self._replay_path is not None:
+                    self._frames.append(self._env.render(prob=None, player="bot"))
+
+                # the eval_episode_return is calculated from Player 1's perspective
+                timestep_player2.info['eval_episode_return'] = -timestep_player2.reward
+                timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
+
+                timestep = timestep_player2
+                # NOTE: in eval_mode, we must set to_play as -1, because we don't consider the alternation between players.
+                # And the to_play is used in MCTS.
+                timestep.obs['to_play'] = -1
+                return timestep
+
             # print(action)
             # player 1 battle with expert player 2
 
