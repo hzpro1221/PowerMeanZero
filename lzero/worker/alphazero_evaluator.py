@@ -195,7 +195,6 @@ class AlphaZeroEvaluator(ISerialEvaluator):
             eval_monitor = VectorEvalMonitor(self._env.env_num, n_episode)
             self._env.reset()
             self._policy.reset()
-            timesteps = self._env.step(-1000)
 
             with self._timer:
                 while not eval_monitor.is_finished():

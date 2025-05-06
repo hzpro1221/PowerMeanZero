@@ -13,7 +13,7 @@ evaluator_env_num = 5
 num_simulations = 25
 update_per_collect = 50
 batch_size = 256
-max_env_step = int(2e5)
+max_env_step = 20000
 mcts_ctree = True
 # ==============================================================
 # end of the most frequently changed config specified by the user
@@ -101,4 +101,5 @@ create_config = tictactoe_alphazero_create_config
 
 if __name__ == '__main__':
     from lzero.entry import train_alphazero, eval_alphazero
+    train_alphazero([main_config, create_config], seed=0, max_env_step=max_env_step)
     # eval_alphazero([main_config, create_config], seed=0)
