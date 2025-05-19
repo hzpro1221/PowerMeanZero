@@ -5,36 +5,50 @@
 #include <string>
 #include <memory>
 #include <iostream>
-#include <vector>
+#include <list>
 
 class Node : public std::enable_shared_from_this<Node> {
 public:
-    // Parent and child nodes are managed using shared_ptr
+    // Shared pointer to the parent node
     std::shared_ptr<Node> parent;
+    
+    // Map of child nodes keyed by action indices
     std::map<int, std::shared_ptr<Node>> children;
     
-    std::vector<int> opp_mov;
-    std::map<int, double> prior_p; // The prior probability of the node
+    // List of opponent moves leading to this node
+    std::list<int> opp_mov;
+    
+    // Prior probabilities for actions (keyed by action)
+    std::map<int, double> prior_p;
 
-    // Constructor
-    Node(std::shared_ptr<Node> parent = nullptr)
+    // Constructor with optional parent node and default prior probability
+    Node(std::shared_ptr<Node> parent = nullptr, double prior_p = 1.0)
         : parent(parent), visit_count(0), value(0.0) {}
 
     // Default destructor
     ~Node() = default;
 
-    // Check if the node is a leaf node
+    // Returns true if the node has no children (i.e., it is a leaf node)
     bool is_leaf() const {
         return children.empty();
     }
 
-    // Check if the node is the root node
+    // Returns true if the node has no parent (i.e., it is the root node)
     bool is_root() const {
         return parent == nullptr;
     }
 
-    int visit_count;      // Visit count
-    float value;      // Value sum
+    // Returns the number of times this node has been visited
+    int get_visit_count() const { return visit_count; }
+
+    int visit_count;      // Number of visits to this node
+    double value;         // Estimated value of the node
+    int flag;             // Debug flag: -1 = node expanded and not terminal,
+                          //             0 = loss,
+                          //             1 = draw,
+                          //             2 = win,
+                          //             3 = expanded node
+    double init_reward;   // Initial reward value for the node
 };
 
 #endif // NODE_ALPHAZERO_H

@@ -11,7 +11,5 @@ PYBIND11_MODULE(node_alphazero, m) {
         }), py::arg("parent")=nullptr)
         .def("is_leaf", &Node::is_leaf)
         .def("is_root", &Node::is_root)
-        .def("visit_count", [](const std::shared_ptr<Node>& self) {
-            return self->visit_count;  
-        });
+        .def_property_readonly("visit_count", &Node::get_visit_count);
 }

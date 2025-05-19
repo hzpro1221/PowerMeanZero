@@ -6,6 +6,7 @@
 #include <vector>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <opencv2/opencv.hpp>
 #include <functional>
 #include <iostream>
 #include <memory>
@@ -29,7 +30,7 @@ class MCTS {
 
     double c;                       // Explore constant
     double p;                       // Power value
-    double gamma;
+    double gamma;                   // Gamma constant
 
     public:
     // Constructor to initialize MCTS with optional parameters
@@ -78,7 +79,7 @@ class MCTS {
     }
 
     // Add Dirichlet noise to the root node for exploration
-    void _add_exploration_noise(std::shared_ptr<Node> node) {
+    void _add_exploration_noise(int opp_mov, std::shared_ptr<Node> node) {
         std::vector<int> actions;
         // Collect all child actions of the root node
         for (const auto& kv : node->children) {
@@ -105,7 +106,7 @@ class MCTS {
         // Mix noise with prior probabilities
         double frac = root_noise_weight;
         for (size_t i = 0; i < actions.size(); ++i) {
-            node->children[actions[i]]->prior_p[-1] = node->children[actions[i]]->prior_p[-1] * (1 - frac) + noise[i] * frac;
+            node->children[actions[i]]->prior_p[-1] = node->children[actions[i]]->prior_p[opp_mov] * (1 - frac) + noise[i] * frac;
         }
     }
 
@@ -116,82 +117,98 @@ class MCTS {
         std::shared_ptr<Node> Q_sh_a = nullptr;
         double best_score = -9999999;
 
-        // Check if opp_mov has observed yet
+        // If opp_mov has not been explored yet
         if (std::find(Q_sh->opp_mov.begin(), Q_sh->opp_mov.end(), opp_mov) == Q_sh->opp_mov.end()) {
             std::map<int, double> action_probs_dict;
             double leaf_value;
-    
-            // Call the policy-value function to get action probabilities and leaf value
+
+            // Get action probabilities and leaf value from the policy-value function
             py::tuple result = policy_value_func(simulate_env);
             action_probs_dict = result[0].cast<std::map<int, double>>();
             leaf_value = result[1].cast<double>();                
-            
-            // Get the legal actions from the simulation environment
+
+            // Extract legal actions from the simulation environment
             py::list legal_actions_list = simulate_env.attr("legal_actions").cast<py::list>();
             std::vector<int> legal_actions = legal_actions_list.cast<std::vector<int>>();
             
             for (const auto& kv : action_probs_dict) {
                 int action = kv.first;
                 double prior_p = kv.second;
+                
+                // Check if the action is legal
                 if (std::find(legal_actions.begin(), legal_actions.end(), action) != legal_actions.end()) {
-                    // Check if action exists or not
+                    // If the child node for the action already exists, update its prior
                     if (Q_sh->children.find(action) != Q_sh->children.end()) {
                         Q_sh->children[action]->prior_p[opp_mov] = prior_p; 
                     } else {
+                        // Create new child nodes for both V and Q trees
                         V_sh->children[action] = std::make_shared<Node>(V_sh);
                         Q_sh->children[action] = std::make_shared<Node>(Q_sh);
-                                                
+                                                    
                         Q_sh->children[action]->prior_p[opp_mov] = prior_p;
                     }
                 }
             }
+
+            // Mark opp_mov as explored
             Q_sh->opp_mov.push_back(opp_mov);            
         }
-
-        // Check if there is any action in legal action list that not being expanded yet
-        // Get the legal actions from the simulation environment
+        
+        // Retrieve legal actions from the simulation environment
         py::list legal_actions_list = simulate_env.attr("legal_actions").cast<py::list>();
         std::vector<int> legal_actions = legal_actions_list.cast<std::vector<int>>();
+
+        // For each legal action, check if it has not been expanded yet
         for (size_t i = 0; i < legal_actions.size(); ++i) {
             int action = legal_actions[i];
 
-            // If action hasn't explored, then expand it
+            // If the action has not been expanded, initialize its child nodes
             if (Q_sh->children.find(action) == Q_sh->children.end()) {
 
+                // Get action probabilities and leaf value from the policy-value function
                 py::tuple result = policy_value_func(simulate_env);
                 std::map<int, double> action_probs_dict = result[0].cast<std::map<int, double>>();
                 double leaf_value = result[1].cast<double>();
 
+                // Create new child nodes for both V and Q trees
                 V_sh->children[action] = std::make_shared<Node>(V_sh);
                 Q_sh->children[action] = std::make_shared<Node>(Q_sh);
 
-                // Use action_probs_dict for prior probability
+                // Set prior probability for the Q node (based on the opponent move)
                 Q_sh->children[action]->prior_p[opp_mov] = action_probs_dict[action];
             }
         }
 
-        // Iterate through all children
+        // Iterate over all child nodes of Q_sh
         for (const auto& kv : Q_sh->children) {
             int action_tmp = kv.first;
             std::shared_ptr<Node> Q_sh_a_tmp = kv.second;
 
-            // Get the legal actions from the simulation environment
+            // Retrieve legal actions from the simulation environment
             py::list legal_actions_list = simulate_env.attr("legal_actions").cast<py::list>();
             std::vector<int> legal_actions = legal_actions_list.cast<std::vector<int>>();
 
-            // Check if the action is legal and calculate UCB score
+            // Check if the current action is legal before proceeding
             if (std::find(legal_actions.begin(), legal_actions.end(), action_tmp) != legal_actions.end()) {
-                // If the prior probability for opp_mov hasn't been initialized yet, initialize it now
+
+                // If prior probability for the current opponent move is uninitialized, initialize it
                 if (Q_sh_a_tmp->prior_p[opp_mov] == 0) {
                     py::tuple result = policy_value_func(simulate_env);
                     std::map<int, double> action_probs_dict = result[0].cast<std::map<int, double>>();
                     double leaf_value = result[1].cast<double>();
-                    
-                    Q_sh_a_tmp->prior_p[opp_mov] = action_probs_dict[action_tmp];
+
+                    // Assign prior probability if available
+                    if (action_probs_dict.find(action_tmp) != action_probs_dict.end()) {
+                        Q_sh_a_tmp->prior_p[opp_mov] = action_probs_dict[action_tmp];
+                    } else {
+                        Q_sh_a_tmp->prior_p[opp_mov] = 0.0;  // Fallback to 0 if action not found
+                    }
                 }
 
+                // Compute UCB score for the current action
                 double score = _ucb_score(opp_mov, V_sh, Q_sh_a_tmp);
 
+                // Update best action if this one has the highest score so far
                 if (score > best_score) {
                     best_score = score;
                     action = action_tmp;
@@ -201,7 +218,7 @@ class MCTS {
             }
         }
         
-        // If no valid child is found, return the current node
+        // If no valid child node was selected, fallback to the current node
         if ((V_sh_plus_1 == nullptr) && (Q_sh_a == nullptr)) {
             V_sh_plus_1 = V_sh;
             Q_sh_a = Q_sh;
@@ -210,45 +227,50 @@ class MCTS {
         return std::make_tuple(action, V_sh_plus_1, Q_sh_a);
     }
 
-    // Expand a leaf node by adding its children based on policy probabilities
+    // Expand a leaf node by adding its legal child actions based on policy network output
     double _expand_leaf_node(int opp_mov, std::shared_ptr<Node> V_sh, std::shared_ptr<Node> Q_sh, py::object simulate_env, py::object policy_value_func) {
         std::map<int, double> action_probs_dict;
         double leaf_value;
 
-        // Call the policy-value function to get action probabilities and leaf value
+        // Query the policy-value function to obtain action probabilities and a leaf value estimate
         py::tuple result = policy_value_func(simulate_env);
         action_probs_dict = result[0].cast<std::map<int, double>>();
         leaf_value = result[1].cast<double>();
 
-        // Get the legal actions from the simulation environment
+        // Retrieve legal actions from the simulation environment
         py::list legal_actions_list = simulate_env.attr("legal_actions").cast<py::list>();
         std::vector<int> legal_actions = legal_actions_list.cast<std::vector<int>>();
 
-        // Add child nodes for legal actions
+        // Create child nodes for each legal action and assign prior probabilities
         for (const auto& kv : action_probs_dict) {
             int action = kv.first;
             double prior_p = kv.second;
             if (std::find(legal_actions.begin(), legal_actions.end(), action) != legal_actions.end()) {
+                // Create new child nodes for both V and Q trees
                 V_sh->children[action] = std::make_shared<Node>(V_sh);
                 Q_sh->children[action] = std::make_shared<Node>(Q_sh);
 
-                Q_sh->children[action]->prior_p[opp_mov] = prior_p;
-                Q_sh->opp_mov.push_back(opp_mov);
+                // Set prior probability for the Q node (based on the opponent move)
+                Q_sh->children[action]->prior_p[opp_mov] = action_probs_dict[action];
             }
         }
 
+        // Record the opponent move and initialize the reward estimate for the current node
+        Q_sh->opp_mov.push_back(opp_mov);
+        Q_sh->init_reward = leaf_value;
         return leaf_value;
     }
 
-    // Main function to get the next action from MCTS
+
+
+    // Perform MCTS to select the next action
     std::tuple<int, std::vector<double>, std::shared_ptr<Node>> get_next_action(py::object state_config_for_env_reset, py::object policy_value_func, double temperature, bool sample) {
         std::shared_ptr<Node> V_root = std::make_shared<Node>();
         std::shared_ptr<Node> Q_root = std::make_shared<Node>();
-
         std::shared_ptr<Node> V_root_2 = std::make_shared<Node>();
         std::shared_ptr<Node> Q_root_2 = std::make_shared<Node>();                
 
-        // Configure initial environment state
+        // Reset the environment to the initial state
         py::object init_state = state_config_for_env_reset["init_state"];
         if (!init_state.is_none()) {
             init_state = py::bytes(init_state.attr("tobytes")());
@@ -257,6 +279,7 @@ class MCTS {
         if (!katago_game_state.is_none()) {
             katago_game_state = py::module::import("pickle").attr("dumps")(katago_game_state);
         }
+
         simulate_env.attr("reset")(
             state_config_for_env_reset["start_player_index"].cast<int>(),
             init_state,
@@ -266,25 +289,23 @@ class MCTS {
 
         // Expand the root node
         double leaf_value = _expand_leaf_node(-1, V_root, Q_root, simulate_env, policy_value_func);
-
-        // Update root node 
         V_root->visit_count++;
         V_root->value = leaf_value;
 
+        // Add Dirichlet noise to encourage exploration if sampling
         if (sample) {
-            _add_exploration_noise(V_root);
-            _add_exploration_noise(Q_root);
+            _add_exploration_noise(-1, V_root);
+            _add_exploration_noise(-1, Q_root);
         }
 
+        // Get legal actions
         py::list legal_actions_py = simulate_env.attr("legal_actions").cast<py::list>();
-
         std::vector<int> legal_actions;
         for (py::handle h : legal_actions_py) {
             legal_actions.push_back(h.cast<int>());
         }
-        // py::print("legal_actions:", legal_actions);
 
-        // Run MCTS simulations
+        // Perform multiple MCTS simulations
         for (int n = 0; n < num_simulations; ++n) {
             simulate_env.attr("reset")(
                 state_config_for_env_reset["start_player_index"].cast<int>(),
@@ -293,38 +314,38 @@ class MCTS {
                 katago_game_state
             );
             simulate_env.attr("battle_mode") = simulate_env.attr("battle_mode_in_simulation_env");
+
             _simulateV(-1, V_root, Q_root, V_root_2, Q_root_2, simulate_env, policy_value_func);
 
-            // Export the tree structure
-            // exportToDot(-1, "/content/tree_player_1.dot", V_root, Q_root);
-            // std::string command = "dot -Tpng -Gdpi=300 /content/tree_player_1.dot -o /content/log_v2/tree_player_1_tree_legal_ac_len_" + std::to_string(legal_actions.size()) + "_num_sti_" + std::to_string(n) + ".png";
-            // int ret = std::system(command.c_str());        
+            // Export both trees to PNG via Graphviz
+            exportToDot(-1, "/content/tree_player_1.dot", V_root, Q_root);
+            std::string command = "dot -Tpng -Gdpi=300 /content/tree_player_1.dot -o /content/log_v2/tree_player_1_tree_legal_ac_len_" + std::to_string(legal_actions.size()) + "_num_sti_" + std::to_string(n) + ".png";
+            std::system(command.c_str());        
 
-            // exportToDot(-1, "/content/tree_player_2.dot", V_root_2, Q_root_2);
-            // std::string command2 = "dot -Tpng -Gdpi=300 /content/tree_player_2.dot -o /content/log_v2/tree_player_2_tree_legal_ac_len_" + std::to_string(legal_actions.size()) + "_num_sti_" + std::to_string(n) + ".png";
-            // int ret2 = std::system(command2.c_str());                    
+            exportToDot(-1, "/content/tree_player_2.dot", V_root_2, Q_root_2);
+            std::string command2 = "dot -Tpng -Gdpi=300 /content/tree_player_2.dot -o /content/log_v2/tree_player_2_tree_legal_ac_len_" + std::to_string(legal_actions.size()) + "_num_sti_" + std::to_string(n) + ".png";
+            std::system(command2.c_str());                    
         }
 
-        // Collect visit counts from the root's children
+        // Visualization for tic-tac-toe
+        py::print("Hey, the legal_actions is:", legal_actions);
+        drawTicTacToeBoard(legal_actions, Q_root, "/content/log_v2_2/tictactoe_board" + std::to_string(legal_actions.size()) + ".png");
+        drawTicTacToeBoardPriorP(legal_actions, -1, Q_root, "/content/log_v2_2/tictactoe_board_prior_p" + std::to_string(legal_actions.size()) + ".png");        
+
+        // Count visits to each action
         std::vector<std::pair<int, int>> action_visits;
         for (int action = 0; action < simulate_env.attr("action_space").attr("n").cast<int>(); ++action) {
-            if (Q_root->children.count(action)) {
-                action_visits.emplace_back(action, Q_root->children[action]->visit_count);
-            }
-            else {
-                action_visits.emplace_back(action, 0);
-            }
+            int visits = Q_root->children.count(action) ? Q_root->children[action]->visit_count : 0;
+            action_visits.emplace_back(action, visits);
         }
 
-        std::vector<int> actions;
-        std::vector<int> visits;
-        for (const auto& av : action_visits) {
-            actions.emplace_back(av.first);
-            visits.emplace_back(av.second);
+        std::vector<int> actions, visits;
+        for (const auto& [a, v] : action_visits) {
+            actions.push_back(a);
+            visits.push_back(v);
         }
 
-        std::vector<double> visits_d(visits.begin(), visits.end());
-        std::vector<double> action_probs = visit_count_to_action_distribution(visits_d, temperature);
+        std::vector<double> action_probs = visit_count_to_action_distribution(std::vector<double>(visits.begin(), visits.end()), temperature);
 
         int action_selected;
         if (sample) {
@@ -334,111 +355,118 @@ class MCTS {
             action_selected = actions[std::distance(action_probs.begin(), std::max_element(action_probs.begin(), action_probs.end()))];
         }
 
-        // py::print("action_probs:", action_probs);
-        // py::print("action_selected:", action_selected, "\n");
-        // Return the selected action, action probabilities, and root node
+        py::print("action_probs:", action_probs);
+        py::print("V_root->visit_count:", V_root->visit_count);
+        py::print("action_selected:", action_selected, "\n");
+
         return std::make_tuple(action_selected, action_probs, Q_root);
     }
 
-    // Simulate a game starting from a given node
-    double _simulateV(int opp_mov, std::shared_ptr<Node> V_sh, std::shared_ptr<Node> Q_sh, std::shared_ptr<Node> V_sh_2, std::shared_ptr<Node> Q_sh_2, py::object simulate_env, py::object policy_value_func) {
-        // Select action
+    // Perform a simulation step starting from the given V-node
+    // Selects a child node, recursively simulates Q-node dynamics,
+    // then updates the V-node's visit count and value estimate accordingly.
+    double _simulateV(int opp_mov, std::shared_ptr<Node> V_sh, std::shared_ptr<Node> Q_sh, 
+                    std::shared_ptr<Node> V_sh_2, std::shared_ptr<Node> Q_sh_2, 
+                    py::object simulate_env, py::object policy_value_func) {
+        // Select the best child action and associated nodes based on the current state
         int action;
         std::shared_ptr<Node> V_sh_plus_1;
         std::shared_ptr<Node> Q_sh_a;
-
         std::tie(action, V_sh_plus_1, Q_sh_a) = _select_child(opp_mov, V_sh, Q_sh, simulate_env, policy_value_func);
 
-        // SimulateQ
+        // Recursively simulate the Q-node after taking the selected action
         double leaf_value = _simulateQ(opp_mov, action, V_sh_plus_1, Q_sh_a, V_sh_2, Q_sh_2, simulate_env, policy_value_func);
 
-        // Update V_sh
+        // Update visit count of the current V-node
         V_sh->visit_count++;
+
+        // Compute the updated value of V-node using a p-norm aggregation over Q-node children values weighted by visit counts
         double tmp = 0.0;
         for (const auto& kv : Q_sh->children) {
             int action_tmp = kv.first;
             std::shared_ptr<Node> Q_sh_a_tmp = kv.second;
-
-            tmp += ((double) Q_sh_a_tmp->visit_count / V_sh->visit_count) * pow(Q_sh_a_tmp->value, p);
-        }        
-        
-        // for p = 1
-        // V_sh->value = pow(tmp, 1/p);
-        if (p == 1.0) {
-            V_sh->value = tmp;
-        } else if (p == 3.0) {
-            V_sh->value = std::cbrt(tmp);
+            tmp += (static_cast<double>(Q_sh_a_tmp->visit_count) / V_sh->visit_count) * pow(Q_sh_a_tmp->value, p);
         }
+        V_sh->value = pow(tmp, 1/p);
+
+        // Return the leaf value propagated from the simulation
         return leaf_value;
     }
 
-    double _simulateQ(int opp_mov, int action, std::shared_ptr<Node> V_sh_plus_1, std::shared_ptr<Node> Q_sh_a, std::shared_ptr<Node> V_sh_2, std::shared_ptr<Node> Q_sh_2, py::object simulate_env, py::object policy_value_func) {
-        // Apply action to env
+    // Perform a Q-node simulation step by applying the selected action,
+    // evaluating game termination or expanding the tree,
+    // then updating node statistics accordingly.
+    double _simulateQ(int opp_mov, int action, std::shared_ptr<Node> V_sh_plus_1, std::shared_ptr<Node> Q_sh_a, 
+                    std::shared_ptr<Node> V_sh_2, std::shared_ptr<Node> Q_sh_2, 
+                    py::object simulate_env, py::object policy_value_func) {
+        // Apply the chosen action in the environment
         simulate_env.attr("step")(action);
 
-        // Check if game is ended
-        bool done;
-        int winner;
-        double leaf_value;
-
+        // Retrieve game termination status and winner
         py::tuple game_result = simulate_env.attr("get_done_winner")();
-        done = game_result[0].cast<bool>();
-        winner = game_result[1].cast<int>();
+        bool done = game_result[0].cast<bool>();
+        int winner = game_result[1].cast<int>();
+
+        double leaf_value;
 
         if (!done) {
             if (V_sh_plus_1->is_leaf()) {
+                // Expand leaf node and get its value estimate
                 leaf_value = _expand_leaf_node(opp_mov, V_sh_plus_1, Q_sh_a, simulate_env, policy_value_func);
-                
-                // Rescale leaf_value
-                // leaf_value = (leaf_value + 1) / 2;
 
-                // Update V_sh_plus_1
+                // Rescale leaf_value to [0,1]
+                leaf_value = std::max(0.0, (leaf_value + 1) / 2.0);
+
+                // Update V_sh_plus_1 node statistics
                 V_sh_plus_1->visit_count++;
-                V_sh_plus_1->value = leaf_value; 
+                V_sh_plus_1->value = leaf_value;
                 V_sh_plus_1->flag = 3;
 
-                // Also update for V_sh_2
+                // Update alternate node V_sh_2 with negated value
                 V_sh_2->visit_count++;
-                V_sh_2->value = 0.0 - leaf_value; 
-                V_sh_2->flag = -1;                
+                V_sh_2->value = 1.0 - leaf_value;
+                V_sh_2->flag = -1;
             } else {
-                leaf_value = 0.0 - _simulateV(action, V_sh_2, Q_sh_2, V_sh_plus_1, Q_sh_a, simulate_env, policy_value_func);
-                V_sh_plus_1->flag = -1;            
+                // Continue simulating from the next V-node (opponent's turn)
+                leaf_value = 1.0 - _simulateV(action, V_sh_2, Q_sh_2, V_sh_plus_1, Q_sh_a, simulate_env, policy_value_func);
+                V_sh_plus_1->flag = -1;
             }
         } else {
+            // Game has ended: assign terminal values
             if (winner == -1) {
-                leaf_value = 0;
-
+                leaf_value = 0.0;
                 V_sh_plus_1->flag = 0;
                 V_sh_2->flag = 0;
             } else {
-                leaf_value = (simulate_env.attr("current_player").cast<int>() == winner) ? -1 : 1;
-                
-                if (leaf_value == -1) {
+                // leaf_value = -1 if current player won, else 1
+                leaf_value = (simulate_env.attr("current_player").cast<int>() == winner) ? -1.0 : 1.0;
+
+                if (leaf_value == -1.0) {
                     V_sh_plus_1->flag = 1;
                     V_sh_2->flag = 2;
                 } else {
                     V_sh_plus_1->flag = 2;
                     V_sh_2->flag = 1;
-                }            
+                }
             }
 
-            // Re-scale leaf_value
-            // leaf_value = (leaf_value + 1) / 2;
+            // Rescale leaf_value to [0,1]
+            leaf_value = std::max(0.0, (leaf_value + 1) / 2.0);
 
-            // Update V_sh_plus_1
+            // Update terminal node statistics
             V_sh_plus_1->visit_count++;
-            V_sh_plus_1->value = leaf_value;    
-            
-            // Also update for V_sh_2
+            V_sh_plus_1->value = leaf_value;
+
             V_sh_2->visit_count++;
-            V_sh_2->value = 0.0 - leaf_value; 
+            V_sh_2->value = 1.0 - leaf_value;
         }
 
+        // Update Q-node value as a running average incorporating leaf value and discounted V-node value
         Q_sh_a->value = (Q_sh_a->value * Q_sh_a->visit_count + leaf_value + gamma * V_sh_plus_1->value) / (Q_sh_a->visit_count + 1);
-        Q_sh_a->visit_count = Q_sh_a->visit_count + 1;
+        Q_sh_a->visit_count++;
+
         return leaf_value;
-    }    
+    }
 
     void writeNode(int action, FILE* file, std::shared_ptr<Node> V_root, std::shared_ptr<Node> Q_root, 
                 std::unordered_map<std::shared_ptr<Node>, int>& nodeToId, int& nextId) {
@@ -557,6 +585,110 @@ class MCTS {
         fprintf(file, "}\n");
         fclose(file);
     } 
+
+    void drawTicTacToeBoard(
+        std::vector<int> legal_actions,
+        std::shared_ptr<Node> root,
+        const std::string& filename
+    ) {
+        const int cellSize = 100;
+        const int lineThickness = 4;
+        const int imageSize = cellSize * 3;
+    
+        cv::Mat image(imageSize, imageSize, CV_8UC3, cv::Scalar(255, 255, 255)); // White background
+    
+        // Draw grid lines
+        for (int i = 1; i < 3; ++i) {
+            int pos = i * cellSize;
+            cv::line(image, cv::Point(pos, 0), cv::Point(pos, imageSize), cv::Scalar(0, 0, 0), lineThickness);
+            cv::line(image, cv::Point(0, pos), cv::Point(imageSize, pos), cv::Scalar(0, 0, 0), lineThickness);
+        }
+    
+        // Draw symbols and confidence overlays
+        for (int row = 0; row < 3; ++row) {
+            for (int col = 0; col < 3; ++col) {
+                int symbol = row * 3 + col; // Correct symbol calculation
+                int x = col * cellSize;
+                int y = row * cellSize;
+                cv::Point center(x + cellSize / 2, y + cellSize / 2);
+    
+                if (std::find(legal_actions.begin(), legal_actions.end(), symbol) != legal_actions.end()) {
+                    // Get the reward from the root node
+                    double reward = root->children[symbol]->init_reward;
+
+                    // Normalize reward from [-1, 1] to [0, 1] for alpha
+                    double confidence = (reward + 1.0) / 2.0;  // Map -1→0, 0→0.5, 1→1.0
+    
+                    // Draw translucent red overlay
+                    cv::Mat roi = image(cv::Rect(x, y, cellSize, cellSize));
+                    cv::Mat overlay(cellSize, cellSize, CV_8UC3, cv::Scalar(0, 0, 255)); // Red
+                    cv::addWeighted(overlay, confidence, roi, 1.0 - confidence, 0, roi);
+    
+                    // Draw actual reward value as text (not normalized)
+                    std::string text = cv::format("%.2f", reward);
+                    cv::putText(image, text, cv::Point(x + 25, y + 60),
+                                cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 0), 2);
+                } else {
+                    cv::circle(image, center, 35, cv::Scalar(255, 0, 0), 4);
+                }
+            }
+        }
+    
+        cv::imwrite(filename, image);
+    }
+
+    void drawTicTacToeBoardPriorP(
+        std::vector<int> legal_actions,
+        int opp_mov,
+        std::shared_ptr<Node> root,
+        const std::string& filename
+    ) {
+        const int cellSize = 100;
+        const int lineThickness = 4;
+        const int imageSize = cellSize * 3;
+    
+        cv::Mat image(imageSize, imageSize, CV_8UC3, cv::Scalar(255, 255, 255)); // White background
+    
+        // Draw grid lines
+        for (int i = 1; i < 3; ++i) {
+            int pos = i * cellSize;
+            cv::line(image, cv::Point(pos, 0), cv::Point(pos, imageSize), cv::Scalar(0, 0, 0), lineThickness);
+            cv::line(image, cv::Point(0, pos), cv::Point(imageSize, pos), cv::Scalar(0, 0, 0), lineThickness);
+        }
+    
+        // Draw symbols and confidence overlays
+        for (int row = 0; row < 3; ++row) {
+            for (int col = 0; col < 3; ++col) {
+                int symbol = row * 3 + col; // Correct symbol calculation
+                int x = col * cellSize;
+                int y = row * cellSize;
+                cv::Point center(x + cellSize / 2, y + cellSize / 2);
+    
+                if (std::find(legal_actions.begin(), legal_actions.end(), symbol) != legal_actions.end()) {
+                    // Get the prior_p from the root node
+                    double prior_p = root->children[symbol]->prior_p[opp_mov];
+
+                    // Use prior_p directly as confidence (no normalization needed)
+                    double confidence = prior_p;  // Map 0→0, 1→1
+
+                    // Draw translucent blue overlay
+                    cv::Mat roi = image(cv::Rect(x, y, cellSize, cellSize));
+                    cv::Mat overlay(cellSize, cellSize, CV_8UC3, cv::Scalar(255, 0, 0)); // Blue
+                    cv::addWeighted(overlay, confidence, roi, 1.0 - confidence, 0, roi);
+
+                    // Draw actual prior_p value as text (not normalized)
+                    std::string text = cv::format("%.2f", prior_p);
+                    cv::putText(image, text, cv::Point(x + 25, y + 60),
+                                cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 0), 2);
+
+                } else {
+                    cv::circle(image, center, 35, cv::Scalar(255, 0, 0), 4); // Blue circle
+                }
+        }
+    
+        cv::imwrite(filename, image);
+        }
+    }   
 
 private:
     // Helper: Convert visit counts to action probabilities using temperature

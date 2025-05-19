@@ -23,7 +23,7 @@ tictactoe_alphazero_config = dict(
     env=dict(
         board_size=3,
         battle_mode='self_play_mode',
-        bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
+        bot_action_type='alpha_beta_pruning',  # {'v0', 'alpha_beta_pruning'}
         channel_last=False,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -101,5 +101,5 @@ create_config = tictactoe_alphazero_create_config
 
 if __name__ == '__main__':
     from lzero.entry import train_alphazero, eval_alphazero
-    train_alphazero([main_config, create_config], seed=0, max_env_step=max_env_step)
-    # eval_alphazero([main_config, create_config], seed=0)
+    # train_alphazero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    eval_alphazero([main_config, create_config], seed=0, model_path="", print_seed_details=True)

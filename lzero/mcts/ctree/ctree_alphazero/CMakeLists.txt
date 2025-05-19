@@ -1,32 +1,29 @@
-# Declare the minimum version of CMake that can be used
-# To understand and build the project
 cmake_minimum_required(VERSION 3.4...3.18)
-
-# Set the project name to mcts_alphazero and set the version to 1.0
 project(mcts_alphazero VERSION 1.0)
 
-# Find and get the details of Python package
-# This is required for embedding Python in the project
+# Python support
 find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
 
-# Add pybind11 as a subdirectory,
-# so that its build files are generated alongside the current project.
-# This is necessary because the current project depends on pybind11
+# OpenCV support
+find_package(OpenCV REQUIRED)
+
+# pybind11 support
 add_subdirectory(pybind11)
 
-# Add two .cpp files to the mcts_alphazero module
-# These files are compiled and linked into the module
+# Your module
 pybind11_add_module(mcts_alphazero mcts_alphazero.cpp node_alphazero.cpp)
 
-# Add the Python header file paths to the include paths
-# of the mcts_alphazero library. This is necessary for the
-# project to find the Python header files it needs to include
-target_include_directories(mcts_alphazero PRIVATE ${Python3_INCLUDE_DIRS})
+# Include paths
+target_include_directories(mcts_alphazero PRIVATE
+    ${Python3_INCLUDE_DIRS}
+    ${OpenCV_INCLUDE_DIRS}
+)
 
-# Link the mcts_alphazero library with the pybind11::module target.
-# This is necessary for the mcts_alphazero library to use the functions and classes defined by pybind11
-target_link_libraries(mcts_alphazero PRIVATE pybind11::module)
+# Link dependencies
+target_link_libraries(mcts_alphazero PRIVATE
+    pybind11::module
+    ${OpenCV_LIBS}
+)
 
-# Set the Python standard to the version of Python found by find_package(Python3)
-# This ensures that the code will be compiled against the correct version of Python
+# Set Python standard
 set_target_properties(mcts_alphazero PROPERTIES PYTHON_STANDARD ${Python3_VERSION})

@@ -135,7 +135,7 @@ class TicTacToeEnv(BaseEnv):
         # Convert NumPy arrays to nested tuples to make them hashable.
         return _get_done_winner_func_lru(tuple(map(tuple, self.board)))
 
-    def reset(self, start_player_index=0, init_state=None, katago_policy_init=False, katago_game_state=None):
+    def reset(self, start_player_index=1, init_state=None, katago_policy_init=False, katago_game_state=None):
         """
         Overview:
             This method resets the environment and optionally starts with a custom state specified by 'init_state'.
@@ -179,6 +179,8 @@ class TicTacToeEnv(BaseEnv):
             # In ``play_with_bot_mode`` and ``eval_mode``, we need to set the "to_play" parameter in the "obs" dict to -1,
             # because we don't take into account the alternation between players.
             # The "to_play" parameter is used in the MCTS algorithm.
+            bot_action = self.bot_action()
+            self._player_step(bot_action, player="bot")            
             obs = {
                 'observation': self.current_state()[1],
                 'action_mask': action_mask,
@@ -255,22 +257,6 @@ class TicTacToeEnv(BaseEnv):
 
             return timestep
         elif self.battle_mode == 'eval_mode':
-            if (action == -1000):
-                bot_action = self.bot_action()
-                timestep_player2 = self._player_step(bot_action, "bot")
-                if self._replay_path is not None:
-                    self._frames.append(self._env.render(prob=None, player="bot"))
-
-                # the eval_episode_return is calculated from Player 1's perspective
-                timestep_player2.info['eval_episode_return'] = -timestep_player2.reward
-                timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
-
-                timestep = timestep_player2
-                # NOTE: in eval_mode, we must set to_play as -1, because we don't consider the alternation between players.
-                # And the to_play is used in MCTS.
-                timestep.obs['to_play'] = -1
-                return timestep
-
             # print(action)
             # player 1 battle with expert player 2
 
