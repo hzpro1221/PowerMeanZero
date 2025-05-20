@@ -347,7 +347,6 @@ class ChessEnv(BaseEnv):
         # Get all legal moves
         legal_moves = list(self.board.legal_moves)
         legal_actions = chess_utils.legal_moves(self.board)
-
         # Create a temporary board to simulate moves
         temp_board = self.board.copy()
 

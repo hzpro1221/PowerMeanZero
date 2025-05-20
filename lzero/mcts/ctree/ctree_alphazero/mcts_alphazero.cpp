@@ -261,8 +261,6 @@ class MCTS {
         return leaf_value;
     }
 
-
-
     // Perform MCTS to select the next action
     std::tuple<int, std::vector<double>, std::shared_ptr<Node>> get_next_action(py::object state_config_for_env_reset, py::object policy_value_func, double temperature, bool sample) {
         std::shared_ptr<Node> V_root = std::make_shared<Node>();
@@ -318,19 +316,18 @@ class MCTS {
             _simulateV(-1, V_root, Q_root, V_root_2, Q_root_2, simulate_env, policy_value_func);
 
             // Export both trees to PNG via Graphviz
-            exportToDot(-1, "/content/tree_player_1.dot", V_root, Q_root);
-            std::string command = "dot -Tpng -Gdpi=300 /content/tree_player_1.dot -o /content/log_v2/tree_player_1_tree_legal_ac_len_" + std::to_string(legal_actions.size()) + "_num_sti_" + std::to_string(n) + ".png";
-            std::system(command.c_str());        
+            // exportToDot(-1, "/content/tree_player_1.dot", V_root, Q_root);
+            // std::string command = "dot -Tpng -Gdpi=300 /content/tree_player_1.dot -o /content/log_v2/tree_player_1_tree_legal_ac_len_" + std::to_string(legal_actions.size()) + "_num_sti_" + std::to_string(n) + ".png";
+            // std::system(command.c_str());        
 
-            exportToDot(-1, "/content/tree_player_2.dot", V_root_2, Q_root_2);
-            std::string command2 = "dot -Tpng -Gdpi=300 /content/tree_player_2.dot -o /content/log_v2/tree_player_2_tree_legal_ac_len_" + std::to_string(legal_actions.size()) + "_num_sti_" + std::to_string(n) + ".png";
-            std::system(command2.c_str());                    
+            // exportToDot(-1, "/content/tree_player_2.dot", V_root_2, Q_root_2);
+            // std::string command2 = "dot -Tpng -Gdpi=300 /content/tree_player_2.dot -o /content/log_v2/tree_player_2_tree_legal_ac_len_" + std::to_string(legal_actions.size()) + "_num_sti_" + std::to_string(n) + ".png";
+            // std::system(command2.c_str());                    
         }
 
         // Visualization for tic-tac-toe
-        py::print("Hey, the legal_actions is:", legal_actions);
-        drawTicTacToeBoard(legal_actions, Q_root, "/content/log_v2_2/tictactoe_board" + std::to_string(legal_actions.size()) + ".png");
-        drawTicTacToeBoardPriorP(legal_actions, -1, Q_root, "/content/log_v2_2/tictactoe_board_prior_p" + std::to_string(legal_actions.size()) + ".png");        
+        // drawTicTacToeBoard(legal_actions, Q_root, "/content/log_v2_2/tictactoe_board" + std::to_string(legal_actions.size()) + ".png");
+        // drawTicTacToeBoardPriorP(legal_actions, -1, Q_root, "/content/log_v2_2/tictactoe_board_prior_p" + std::to_string(legal_actions.size()) + ".png");        
 
         // Count visits to each action
         std::vector<std::pair<int, int>> action_visits;
@@ -355,9 +352,9 @@ class MCTS {
             action_selected = actions[std::distance(action_probs.begin(), std::max_element(action_probs.begin(), action_probs.end()))];
         }
 
-        py::print("action_probs:", action_probs);
-        py::print("V_root->visit_count:", V_root->visit_count);
-        py::print("action_selected:", action_selected, "\n");
+        // py::print("action_probs:", action_probs);
+        // py::print("V_root->visit_count:", V_root->visit_count);
+        // py::print("action_selected:", action_selected, "\n");
 
         return std::make_tuple(action_selected, action_probs, Q_root);
     }

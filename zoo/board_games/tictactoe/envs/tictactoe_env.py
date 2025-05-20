@@ -179,6 +179,18 @@ class TicTacToeEnv(BaseEnv):
             # In ``play_with_bot_mode`` and ``eval_mode``, we need to set the "to_play" parameter in the "obs" dict to -1,
             # because we don't take into account the alternation between players.
             # The "to_play" parameter is used in the MCTS algorithm.
+            # Randomly decide the starting player
+            start_player_index = np.random.choice([0, 1])
+
+            if (start_player_index == 0):
+                self.current_player = self.players[start_player_index]
+            elif (start_player_index == 1):
+                self.current_player = self.players[start_player_index]
+                
+                # Take the bot_action then apply it to environment
+                action = self.bot_action()
+                self._player_step(action)                
+
             bot_action = self.bot_action()
             self._player_step(bot_action, player="bot")            
             obs = {
@@ -224,7 +236,7 @@ class TicTacToeEnv(BaseEnv):
                 if np.random.rand() < self.prob_expert_agent:
                     action = self.bot_action()
 
-            timestep = self._player_step(action, player="policy")
+            timestep = self._player_step(action)
             if timestep.done:
                 # The eval_episode_return is calculated from Player 1's perspective。
                 timestep.info['eval_episode_return'] = -timestep.reward if timestep.obs[
@@ -234,7 +246,7 @@ class TicTacToeEnv(BaseEnv):
             # player 1 battle with expert player 2
 
             # player 1's turn
-            timestep_player1 = self._player_step(action, player="policy")
+            timestep_player1 = self._player_step(action)
             # self.env.render()
             if timestep_player1.done:
                 # NOTE: in play_with_bot_mode, we must set to_play as -1, because we don't consider the alternation between players.
@@ -261,7 +273,7 @@ class TicTacToeEnv(BaseEnv):
             # player 1 battle with expert player 2
 
             # player 1's turn
-            timestep_player1 = self._player_step(action["action"], "policy")
+            timestep_player1 = self._player_step(action["action"])
             if self._replay_path is not None:
                 self._frames.append(self._env.render(prob=action["probs"], player="policy"))            
             # self.env.render()
@@ -317,14 +329,14 @@ class TicTacToeEnv(BaseEnv):
                     self._save_replay_count += 1
             return timestep
 
-    def _player_step(self, action, player):
+    def _player_step(self, action):
         # print(f"Player {player} has played action {action}!")
         if action in self.legal_actions:
             row, col = self.action_to_coord(action)
             self.board[row, col] = self.current_player
         else:
             logging.warning(
-                f"PLAYER {player}!!, You input illegal action: {action}, the legal_actions are {self.legal_actions}. "
+                f"You input illegal action: {action}, the legal_actions are {self.legal_actions}. "
                 f"Now we randomly choice a action from self.legal_actions."
             )
             action = np.random.choice(self.legal_actions)

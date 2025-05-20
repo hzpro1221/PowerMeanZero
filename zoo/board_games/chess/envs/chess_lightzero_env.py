@@ -11,9 +11,9 @@ from ding.envs.env.base_env import BaseEnvTimestep
 from ding.utils.registry_factory import ENV_REGISTRY
 from gymnasium import spaces
 from pettingzoo.classic.chess import chess_utils
+from stockfish import Stockfish
 
 from zoo.board_games.chess.envs.chess_env import ChessEnv
-
 
 @ENV_REGISTRY.register('chess_lightzero')
 class ChessLightZeroEnv(ChessEnv):
@@ -41,7 +41,7 @@ class ChessLightZeroEnv(ChessEnv):
         self._action_space = None
 
         # self.board_history = np.zeros((8, 8, 104), dtype=bool)
-
+        self.stockfish = Stockfish(path="./stockfish/stockfish-ubuntu-x86-64-avx2")
         self.render_mode = self.cfg.get("render_mode", None)
         self.screen_height = self.screen_width = self.cfg.get("screen_size", 800)
         assert self.render_mode is None or self.render_mode in self.metadata["render_modes"]
@@ -52,6 +52,23 @@ class ChessLightZeroEnv(ChessEnv):
     def legal_actions(self):
         return chess_utils.legal_moves(self.board)
 
+    def bot_action(self):
+        self.stockfish.set_fen_position(self.board.fen())
+        uci_move = self.stockfish.get_best_move()  # e.g., 'e2e4'
+
+        # Convert the UCI move to the action space
+        TOTAL = 73
+        move = chess.Move.from_uci(uci_move)
+        source = move.from_square
+
+        coord = chess_utils.square_to_coord(source)
+        panel = chess_utils.get_move_plane(move)
+        action = (coord[0] * 8 + coord[1]) * TOTAL + panel
+
+        if action not in self.legal_actions:
+            raise ValueError(f"Bot's action {action} is not legal.")
+        return action
+    
     def observe(self, agent_index):
         try:
             observation = chess_utils.get_observation(self.board, agent_index).astype(float)  # TODO
@@ -141,6 +158,17 @@ class ChessLightZeroEnv(ChessEnv):
         # self.board_history = np.zeros((8, 8, 104), dtype=bool)
 
         if self.battle_mode == 'play_with_bot_mode' or self.battle_mode == 'eval_mode':
+            # Randomly decide the starting player
+            start_player_index = np.random.choice([0, 1])
+
+            if (start_player_index == 0):
+                self.current_player = self.players[start_player_index]
+            elif (start_player_index == 1):
+                self.current_player = self.players[start_player_index]
+                # Take the bot_action then apply it to environment
+                action = self.bot_action()
+                self._player_step(action)                
+
             obs = {
                 'observation': self.observe(self.current_player_index)['observation'],
                 'action_mask': action_mask,
@@ -194,7 +222,7 @@ class ChessLightZeroEnv(ChessEnv):
             timestep.obs['to_play'] = -1
 
             return timestep
-        elif self.battle_mode == 'eval_mode':
+        elif self.battle_mode == 'eval_mode':            
             timestep_player1 = self._player_step(action)
             if timestep_player1.done:
                 timestep_player1.obs['to_play'] = -1

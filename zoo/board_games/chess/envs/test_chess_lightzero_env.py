@@ -109,3 +109,23 @@ def test_create_evaluator_env_cfg(env):
     assert isinstance(evaluator_env_cfg, list)
     assert len(evaluator_env_cfg) == evaluator_env_num
     assert evaluator_env_cfg[0].battle_mode == 'eval_mode'
+
+def main():
+    from easydict import EasyDict
+    from zoo.board_games.chess.envs.chess_lightzero_env import ChessLightZeroEnv
+
+    cfg = EasyDict({
+        'channel_last': False,
+        'scale': False,
+        'battle_mode': 'self_play_mode',
+        'prob_random_agent': 0,
+        'prob_expert_agent': 0,
+        'agent_vs_human': False,
+        'alphazero_mcts_ctree': False,
+        'replay_path': None,
+    })
+
+    env_instance = ChessLightZeroEnv(cfg)
+
+if __name__ == "__main__":
+    main()
