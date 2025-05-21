@@ -204,7 +204,7 @@ class AlphaZeroEvaluator(ISerialEvaluator):
                     # policy forward
                     # ==============================================================
                     policy_output = self._policy.forward(obs)
-                    actions = {env_id: output for env_id, output in policy_output.items()}
+                    actions = {env_id: output["action"] for env_id, output in policy_output.items()}
                     # ==============================================================
                     # Interact with env.
                     # ==============================================================

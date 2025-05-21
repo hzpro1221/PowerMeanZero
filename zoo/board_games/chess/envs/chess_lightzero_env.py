@@ -159,15 +159,16 @@ class ChessLightZeroEnv(ChessEnv):
 
         if self.battle_mode == 'play_with_bot_mode' or self.battle_mode == 'eval_mode':
             # Randomly decide the starting player
-            start_player_index = np.random.choice([0, 1])
-
-            if (start_player_index == 0):
-                self.current_player = self.players[start_player_index]
-            elif (start_player_index == 1):
-                self.current_player = self.players[start_player_index]
+            self.start_player_index = int(np.random.choice([0, 1]))
+ 
+            if (self.start_player_index == 0):
+                self._current_player = self.players[self.start_player_index]
+            elif (self.start_player_index == 1):
+                self._current_player = self.players[self.start_player_index]
+               
                 # Take the bot_action then apply it to environment
                 action = self.bot_action()
-                self._player_step(action)                
+                self._player_step(action)
 
             obs = {
                 'observation': self.observe(self.current_player_index)['observation'],
