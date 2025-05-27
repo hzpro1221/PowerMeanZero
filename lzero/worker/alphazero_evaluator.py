@@ -199,7 +199,6 @@ class AlphaZeroEvaluator(ISerialEvaluator):
             with self._timer:
                 while not eval_monitor.is_finished():
                     obs = self._env.ready_obs
-
                     # ==============================================================
                     # policy forward
                     # ==============================================================

@@ -174,7 +174,7 @@ class ChessLightZeroEnv(ChessEnv):
                 'observation': self.observe(self.current_player_index)['observation'],
                 'action_mask': action_mask,
                 'board': self.board.fen(),
-                'current_player_index': self.start_player_index,
+                'current_player_index': self.current_player_index,
                 'to_play': -1
             }
         elif self.battle_mode == 'self_play_mode':

@@ -176,25 +176,13 @@ class TicTacToeEnv(BaseEnv):
             # In ``play_with_bot_mode`` and ``eval_mode``, we need to set the "to_play" parameter in the "obs" dict to -1,
             # because we don't take into account the alternation between players.
             # The "to_play" parameter is used in the MCTS algorithm.
-            # Randomly decide the starting player
-            self.start_player_index = int(np.random.choice([0, 1]))
- 
-            if (self.start_player_index == 0):
-                self._current_player = self.players[self.start_player_index]
-            elif (self.start_player_index == 1):
-                self._current_player = self.players[self.start_player_index]
-
-                # Take the bot_action then apply it to environment
-                action = self.bot_action()
-                self._player_step(action)
-                            
             obs = {
                 'observation': self.current_state()[1],
                 'action_mask': action_mask,
                 'board': copy.deepcopy(self.board),
-                'current_player_index': self.start_player_index,
+                'current_player_index': self.current_player_index,
                 'to_play': -1
-            }
+            }            
         elif self.battle_mode == 'self_play_mode':
             # In the "self_play_mode", we set to_play=self.current_player in the "obs" dict,
             # which is used to differentiate the alternation of 2 players in the game when calculating Q in the MCTS algorithm.
