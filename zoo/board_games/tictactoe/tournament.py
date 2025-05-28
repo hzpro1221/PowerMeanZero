@@ -5,6 +5,8 @@ from zoo.board_games.alphabeta_pruning_bot import AlphaBetaPruningBot
 from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
 import time
 import torch 
+import numpy as np
+import copy
 
 def config_policy_env():
     # ==============================================================
@@ -115,6 +117,24 @@ def config_alpha_beta_prunning():
     )
     return cfg
 
+def config_tree():
+    tree_config=dict(
+        # (int) The number of simulations to perform at each move.
+        num_simulations=100,
+        # (int) The maximum number of moves to make in a game.
+        max_moves=512,  # for chess and shogi, 722 for Go.
+        # (float) The alpha value used in the Dirichlet distribution for exploration at the root node of the search tree.
+        root_dirichlet_alpha=0.3,
+        # (float) The noise weight at the root node of the search tree.
+        root_noise_weight=0.25,
+        # (int) The base constant used in the PUCT formula for balancing exploration and exploitation during tree search.
+        pb_c_base=19652,
+        # (float) The initialization constant used in the PUCT formula for balancing exploration and exploitation during tree search.
+        pb_c_init=1.25,
+    )
+    tree_config = EasyDict(tree_config)
+    return tree_config
+
 def mock_policy_value_func(env):
     # For mocking purposes, we return a distribution of 1 over legal actions
     action_probs_dict = {}
@@ -123,13 +143,48 @@ def mock_policy_value_func(env):
         action_probs_dict[action] = 1.0
 
     # Get roll-out value
-    num_roll_out = 100
-    # Get environment observation
-    obs = env.ready_obs()
-    print("obs: ", obs)
+    num_rollout = 100
 
-    # for _ in range(num_roll_out):
-    return action_probs_dict, 0.0  
+    # Get environment observation
+    action_mask = np.zeros(env.total_num_actions, 'int8')
+    action_mask[env.legal_actions] = 1
+    state_config_for_env_reset = {
+        'init_state': copy.deepcopy(env.board),
+        'start_player_index': env.players.index(env.current_player),
+        'katago_policy_init': False,
+        'katago_game_state': None
+    }
+    total_reward = 0.0    
+    
+    # Perform rollouts
+    for _ in range(num_rollout):
+        env.reset(
+            start_player_index=state_config_for_env_reset.get('start_player_index'),
+            init_state=state_config_for_env_reset.get('init_state')
+        )
+        env.battle_mode = env.battle_mode_in_simulation_env
+        while not env.get_done_winner()[0]:
+            # Randomly pick action
+            action = np.random.choice(env.legal_actions)
+            env.step(action)
+        
+        # Get the leaf value            
+        done, winner = env.get_done_winner()
+        if (winner == -1):
+            leaf_value = 0
+        else:
+            leaf_value = -1 if state_config_for_env_reset.get('start_player_index') == winner else 1
+        total_reward += leaf_value
+    # Average the total reward over the number of rollouts
+    avr_reward = total_reward / num_rollout 
+    
+    # Reset the evironment
+    env.reset(
+        start_player_index=state_config_for_env_reset.get('start_player_index'),
+        init_state=state_config_for_env_reset.get('init_state')
+    )
+    return action_probs_dict, avr_reward
+
 if __name__ == "__main__":
     # Path to AlphaZero with UCT agorithm
     alpha_zero_uct_path = []
@@ -151,31 +206,13 @@ if __name__ == "__main__":
 
     # Preparing environment
     env = TicTacToeEnv(EasyDict(cfg_alpha_beta))
-    
-    obs = env.reset()
-    
-    print("env.legal_actions:", env.legal_actions)
-    print("mock_policy_value_func: ", mock_policy_value_func(env))
-    
-    tree_config=dict(
-        # (int) The number of simulations to perform at each move.
-        num_simulations=25,
-        # (int) The maximum number of moves to make in a game.
-        max_moves=512,  # for chess and shogi, 722 for Go.
-        # (float) The alpha value used in the Dirichlet distribution for exploration at the root node of the search tree.
-        root_dirichlet_alpha=0.3,
-        # (float) The noise weight at the root node of the search tree.
-        root_noise_weight=0.25,
-        # (int) The base constant used in the PUCT formula for balancing exploration and exploitation during tree search.
-        pb_c_base=19652,
-        # (float) The initialization constant used in the PUCT formula for balancing exploration and exploitation during tree search.
-        pb_c_init=1.25,
-    )
+    env_for_UCT = TicTacToeEnv(EasyDict(cfg_alpha_beta))
+    env_for_stochastc_powermean_UCT = TicTacToeEnv(EasyDict(cfg_alpha_beta))
 
-    tree_config = EasyDict(tree_config)
+    tree_config= config_tree()
     # UCT agorithm
     from lzero.mcts.ptree.ptree_az import MCTS as mcts_uct 
-    UCT = mcts_uct(tree_config, env)
+    UCT = mcts_uct(tree_config, env_for_UCT)
 
     # Stochastic PowerMean UCT algorithm
     from lzero.mcts.ctree.ctree_alphazero.test.eval_alphazero_ctree import find_and_add_to_sys_path
@@ -185,9 +222,34 @@ if __name__ == "__main__":
     stochastc_powermean_UCT = mcts_alphazero.MCTS(tree_config.max_moves, tree_config.num_simulations,
                                                 tree_config.pb_c_base,
                                                 tree_config.pb_c_init, tree_config.root_dirichlet_alpha,
-                                                tree_config.root_noise_weight, env)            
+                                                tree_config.root_noise_weight, env_for_stochastc_powermean_UCT)            
 
-    print("Thing work fine!")
+    # Test code for the tournament between UCT and stochastc_powermean_UCT
+    player_index = 0
+    env.reset()
+    while not env.get_done_reward()[0]:
+        state_config_for_env_reset = {
+            'init_state': copy.deepcopy(env.board),
+            'start_player_index': env.players.index(env.current_player),
+            'katago_policy_init': False,
+            'katago_game_state': None
+        }
+        print("start_player_index:", state_config_for_env_reset.get('start_player_index'))
+
+        if (player_index == 0):
+            start = time.time()
+            action = UCT.get_next_action(state_config_for_env_reset, mock_policy_value_func, 1.0, False)
+            print('UCT action time: ', time.time() - start)
+            player_index = 1
+        else:
+            start = time.time()
+            action = stochastc_powermean_UCT.get_next_action(state_config_for_env_reset, mock_policy_value_func, 1.0, False)
+            print('Stochastic PowerMean UCT action time: ', time.time() - start)
+            player_index = 0
+        env.step(action[0])
+        print("state:", env.board)
+        print('-' * 15)
+    print('reward: ', env.get_done_reward()[0])
 
     # # Hyperparameter for the tournament
     # number_of_game = 100

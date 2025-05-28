@@ -163,12 +163,13 @@ class TicTacToeEnv(BaseEnv):
         self.start_player_index = start_player_index
         self._current_player = self.players[self.start_player_index]
         if init_state is not None:
+            if isinstance(init_state, (bytes, bytearray)):
+                init_state = np.frombuffer(init_state, dtype=np.int32).reshape((self.board_size, self.board_size))
             self.board = np.array(copy.deepcopy(init_state), dtype="int32")
             if self.alphazero_mcts_ctree:
                 self.board = self.board.reshape((self.board_size, self.board_size))
         else:
             self.board = np.zeros((self.board_size, self.board_size), dtype="int32")
- 
         action_mask = np.zeros(self.total_num_actions, 'int8')
         action_mask[self.legal_actions] = 1
  
@@ -180,7 +181,7 @@ class TicTacToeEnv(BaseEnv):
                 'observation': self.current_state()[1],
                 'action_mask': action_mask,
                 'board': copy.deepcopy(self.board),
-                'current_player_index': self.current_player_index,
+                'current_player_index': self.start_player_index,
                 'to_play': -1
             }            
         elif self.battle_mode == 'self_play_mode':
