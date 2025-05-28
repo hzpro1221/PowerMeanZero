@@ -7,6 +7,7 @@ import time
 import torch 
 import numpy as np
 import copy
+import json
 
 def config_policy_env():
     # ==============================================================
@@ -61,7 +62,7 @@ def config_policy_env():
                 value_head_hidden_channels=[8],
                 policy_head_hidden_channels=[8],
             ),
-            cuda=True,
+            cuda=False,
             board_size=3,
             update_per_collect=update_per_collect,
             batch_size=batch_size,
@@ -78,6 +79,11 @@ def config_policy_env():
             evaluator_env_num=evaluator_env_num,
         ),
     )
+
+    if (tictactoe_alphazero_config["policy"]["cuda"] == True):
+        tictactoe_alphazero_config['policy']['device'] = 'cuda:0'
+    else:
+        tictactoe_alphazero_config['policy']['device'] = 'cpu'
 
     tictactoe_alphazero_config = EasyDict(tictactoe_alphazero_config)
     main_config = tictactoe_alphazero_config
@@ -143,7 +149,7 @@ def mock_policy_value_func(env):
         action_probs_dict[action] = 1.0
 
     # Get roll-out value
-    num_rollout = 100
+    num_rollout = 200
 
     # Get environment observation
     action_mask = np.zeros(env.total_num_actions, 'int8')
@@ -185,24 +191,151 @@ def mock_policy_value_func(env):
     )
     return action_probs_dict, avr_reward
 
+def policy_forward_func(policy, env):
+    action_mask = np.zeros(env.total_num_actions, 'int8')
+    action_mask[env.legal_actions] = 1
+    obs = {0: {
+        'observation': env.current_state()[1],
+        'action_mask': action_mask,
+        'board': copy.deepcopy(env.board),
+        'current_player_index': env.players.index(env.current_player),
+        'to_play': env.current_player
+    }}
+    action = [policy._forward_eval(obs)[0]["action"]]
+    return action[0]
+
+def alpha_beta_prunning_forward_func(alpha_beta_prunning_algorithm, env):
+    state_config_for_env_reset = {
+        'init_state': copy.deepcopy(env.board),
+        'start_player_index': env.players.index(env.current_player),
+        'katago_policy_init': False,
+        'katago_game_state': None
+    }
+
+    action = [alpha_beta_prunning_algorithm.get_best_action(state_config_for_env_reset.get("init_state"), player_index=state_config_for_env_reset["start_player_index"])]
+    return action[0]
+
+def uct_forward_func(UCT, env):
+    state_config_for_env_reset = {
+        'init_state': copy.deepcopy(env.board),
+        'start_player_index': env.players.index(env.current_player),
+        'katago_policy_init': False,
+        'katago_game_state': None
+    }
+
+    action = UCT.get_next_action(state_config_for_env_reset, mock_policy_value_func, 1.0, False)
+    return action[0]
+
+def stochastc_powermean_UCT_forward_func(stochastc_powermean_UCT, env):
+    state_config_for_env_reset = {
+        'init_state': copy.deepcopy(env.board),
+        'start_player_index': env.players.index(env.current_player),
+        'katago_policy_init': False,
+        'katago_game_state': None
+    }
+
+    action = stochastc_powermean_UCT.get_next_action(state_config_for_env_reset, mock_policy_value_func, 1.0, False)
+    return action[0]
+
+def evaluate_func(player_1, player_2, env, num_game=20):
+    print(f"Start evaluating between {player_1['name']} and {player_2['name']}...")
+    win = 0
+    draw = 0
+    lose = 0
+
+    for i in range(num_game):
+        print(f"\tGame {i}...")
+        mov_count = 0
+        player_index = 0
+        env.reset()
+        while not env.get_done_reward()[0]:
+            if (mov_count == 0):
+                # Randomly pick action
+                action = np.random.choice(env.legal_actions)
+                mov_count += 1
+
+                env.step(action)
+
+                if (player_index == 0):
+                    player_index = 1
+                else:
+                    player_index = 0                                
+                print(env.board)
+                print('-' * 15)
+                continue
+
+            if (player_index == 0):
+                start = time.time()
+                action = player_1["forward_func"](player_1["policy"], env)
+                print(f'{player_1["name"]} action time:  {time.time() - start}')
+                player_index = 1
+            else:
+                start = time.time()
+                action = player_2["forward_func"](player_2["policy"], env)
+                print(f'{player_2["name"]} action time:  {time.time() - start}')
+                player_index = 0
+            
+            env.step(action)
+            print(env.board)
+            print('-' * 15)
+
+        print('\treward: ', env.get_done_reward()[1])
+        if (env.get_done_reward()[1] == 1):
+            win += 1
+        elif (env.get_done_reward()[1] == 0):
+            draw += 1
+        elif (env.get_done_reward()[1] == -1):
+            lose += 1
+    print("win:", win, "; draw:", draw, "; lose:", lose)
+    return {"win": win,
+            "draw": draw,
+            "lose": lose}
+
 if __name__ == "__main__":
-    # Path to AlphaZero with UCT agorithm
-    alpha_zero_uct_path = []
+    # Path to AlphaZero with UCT algorithm
+    alpha_zero_uct_path = [
+        "/content/uct/iteration_80000.pth.tar",
+        "/content/uct/iteration_60000.pth.tar",
+        "/content/uct/iteration_40000.pth.tar",
+        "/content/uct/iteration_20000.pth.tar",
+    ]
 
     # Path to AlphaZero with Stochastic PowerMean UCT algorithm
-    alpha_zero_powermean_uct_path = [] 
+    alpha_zero_powermean_uct_path = [
+        "/content/powermean_uct/iteration_80000.pth.tar",
+        "/content/powermean_uct/iteration_60000.pth.tar",
+        "/content/powermean_uct/iteration_40000.pth.tar",
+        "/content/powermean_uct/iteration_20000.pth.tar",
+    ]  
 
     # Prepare config for policy and environment
     cfg, create_cfg = config_policy_env()
     cfg = compile_config(cfg, seed=0, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
 
-    # Loading policy and checkpoint
-    policy = create_policy(cfg.policy, model=None, enable_field=['learn', 'collect', 'eval'])
-    # policy.learn_mode.load_state_dict(torch.load(alpha_zero_uct_path[0], map_location=cfg.policy.device))
+    # Load policy for AlphaZero with UCT algorithm
+    alpha_zero_uct_policies = []
+    for checkpoint_path in alpha_zero_uct_path:
+        policy = create_policy(cfg.policy, model=None, enable_field=['learn', 'collect', 'eval'])
+        policy.learn_mode.load_state_dict(torch.load(checkpoint_path, map_location=cfg.policy.device))
+        alpha_zero_uct_policies.append({"name": f"AlphaZero with UCT algorithm: {checkpoint_path}",
+                                        "policy": policy,
+                                        "forward_func": policy_forward_func})
 
-    # Alpha-Beta prunning algorithm
+    # Load policy for AlphaZero with Stochastic PowerMean UCT algorithm
+    alpha_zero_powermean_uct_policies = []
+    for checkpoint_path in alpha_zero_powermean_uct_path:
+        policy = create_policy(cfg.policy, model=None, enable_field=['learn', 'collect', 'eval'])
+        policy.learn_mode.load_state_dict(torch.load(checkpoint_path, map_location=cfg.policy.device))
+        alpha_zero_powermean_uct_policies.append({"name": f"AlphaZero with Stochastic PowerMean UCT algorithm: {checkpoint_path}",
+                                                  "policy": policy,
+                                                  "forward_func": policy_forward_func})
+
+    # Load Alpha-Beta prunning algorithm
     cfg_alpha_beta = config_alpha_beta_prunning()
-    alpha_beta_prunning_agorithm = AlphaBetaPruningBot(TicTacToeEnv, cfg_alpha_beta, 'alpha_beta_pruning_player')
+    alpha_beta_prunning = AlphaBetaPruningBot(TicTacToeEnv, cfg_alpha_beta, 'alpha_beta_pruning_player')
+    alpha_beta_prunning_algorithm = {"name": "AlphaBetaPruning algorithm",
+                                    "policy": alpha_beta_prunning,
+                                    "forward_func": alpha_beta_prunning_forward_func}
 
     # Preparing environment
     env = TicTacToeEnv(EasyDict(cfg_alpha_beta))
@@ -210,11 +343,14 @@ if __name__ == "__main__":
     env_for_stochastc_powermean_UCT = TicTacToeEnv(EasyDict(cfg_alpha_beta))
 
     tree_config= config_tree()
-    # UCT agorithm
+    # Load UCT algorithm
     from lzero.mcts.ptree.ptree_az import MCTS as mcts_uct 
     UCT = mcts_uct(tree_config, env_for_UCT)
+    UCT_algorithm = {"name": "UCT algorithm", 
+                    "policy": UCT,
+                    "forward_func": uct_forward_func}
 
-    # Stochastic PowerMean UCT algorithm
+    # Load Stochastic PowerMean UCT algorithm
     from lzero.mcts.ctree.ctree_alphazero.test.eval_alphazero_ctree import find_and_add_to_sys_path
     # Use the function to add the desired path to sys.path
     find_and_add_to_sys_path("lzero/mcts/ctree/ctree_alphazero/build")
@@ -223,55 +359,140 @@ if __name__ == "__main__":
                                                 tree_config.pb_c_base,
                                                 tree_config.pb_c_init, tree_config.root_dirichlet_alpha,
                                                 tree_config.root_noise_weight, env_for_stochastc_powermean_UCT)            
+    stochastc_powermean_UCT_algorithm =  {"name": "Stochastic Powermean UCT algorithm",
+                                        "policy": stochastc_powermean_UCT,
+                                        "forward_func": stochastc_powermean_UCT_forward_func}
 
-    # Test code for the tournament between UCT and stochastc_powermean_UCT
-    player_index = 0
-    env.reset()
-    while not env.get_done_reward()[0]:
-        state_config_for_env_reset = {
-            'init_state': copy.deepcopy(env.board),
-            'start_player_index': env.players.index(env.current_player),
-            'katago_policy_init': False,
-            'katago_game_state': None
-        }
-        print("start_player_index:", state_config_for_env_reset.get('start_player_index'))
 
-        if (player_index == 0):
-            start = time.time()
-            action = UCT.get_next_action(state_config_for_env_reset, mock_policy_value_func, 1.0, False)
-            print('UCT action time: ', time.time() - start)
-            player_index = 1
-        else:
-            start = time.time()
-            action = stochastc_powermean_UCT.get_next_action(state_config_for_env_reset, mock_policy_value_func, 1.0, False)
-            print('Stochastic PowerMean UCT action time: ', time.time() - start)
-            player_index = 0
-        env.step(action[0])
-        print("state:", env.board)
-        print('-' * 15)
-    print('reward: ', env.get_done_reward()[0])
+    tournament_result = []
 
-    # # Hyperparameter for the tournament
-    # number_of_game = 100
-    
-    # for _ in range(number_of_game):
-    #     # Reset environment and player index
-    #     env.reset()
-    #     player_index = 0  # player 1 fist
+    # for alpha_zero_uct_policy in alpha_zero_uct_policies:
+    #     # Player1: AlphaZero with UCT algorithm | Player2: UCT algorithm
+    #     result = evaluate_func(player_1=alpha_zero_uct_policy, player_2=UCT_algorithm, env=env)
+    #     tournament_result.append({"player_1": alpha_zero_uct_policy["name"],
+    #                               "player_2": UCT_algorithm["name"],
+    #                               "result": result,
+    #                               "note": "Game result is viewed from player_1's perspective."})
+        
+    #     # Player1: AlphaZero with UCT algorithm | Player2: Stochastic PowerMean UCT algorithm
+    #     result = evaluate_func(player_1=alpha_zero_uct_policy, player_2=stochastc_powermean_UCT_algorithm, env=env)
+    #     tournament_result.append({"player_1": alpha_zero_uct_policy["name"],
+    #                               "player_2": stochastc_powermean_UCT_algorithm["name"],
+    #                               "result": result,
+    #                               "note": "Game result is viewed from player_1's perspective."})
+            
+    #     # Player1: AlphaZero with UCT algorithm | Player2: Alpha-Beta prunning algorithm
+    #     result = evaluate_func(player_1=alpha_zero_uct_policy, player_2=alpha_beta_prunning_algorithm, env=env)
+    #     tournament_result.append({"player_1": alpha_zero_uct_policy["name"],
+    #                               "player_2": alpha_beta_prunning_algorithm["name"],
+    #                               "result": result,
+    #                               "note": "Game result is viewed from player_1's perspective."})        
 
-    #     while not env.get_done_reward()[0]:
-    #             if player_index == 0:
-    #                 start = time.time()
-    #                 action = player_0.get_best_action(state, player_index=player_index)
-    #                 print('player 1 action time: ', time.time() - start)
-    #                 player_index = 1
-    #             else:
-    #                 start = time.time()
-    #                 action = player_1.get_best_action(state, player_index=player_index)
-    #                 print('player 2 action time: ', time.time() - start)
-    #                 player_index = 0
-    #             env.step(action)
-    #             state = env.board
-    #             print('-' * 15)
-    #             print(state)
-    #             row, col = env.action_to_coord(action)        
+    #     # Player1: UCT algorithm | Player2: AlphaZero with UCT algorithm
+    #     result = evaluate_func(player_1=UCT_algorithm, player_2=alpha_zero_uct_policy, env=env)
+    #     tournament_result.append({"player_1": UCT_algorithm["name"],
+    #                               "player_2": alpha_zero_uct_policy["name"],
+    #                               "result": result,
+    #                               "note": "Game result is viewed from player_1's perspective."})        
+
+    #     # Player1: Stochastic PowerMean UCT algorithm | Player2: AlphaZero with UCT algorithm
+    #     result = evaluate_func(player_1=stochastc_powermean_UCT_algorithm, player_2=alpha_zero_uct_policy, env=env)
+    #     tournament_result.append({"player_1": stochastc_powermean_UCT_algorithm["name"],
+    #                               "player_2": alpha_zero_uct_policy["name"],
+    #                               "result": result,
+    #                               "note": "Game result is viewed from player_1's perspective."})        
+
+    #     # Player1: Alpha-Beta prunning algorithm | Player2: AlphaZero with UCT algorithm
+    #     result = evaluate_func(player_1=alpha_beta_prunning_algorithm, player_2=alpha_zero_uct_policy, env=env)
+    #     tournament_result.append({"player_1": alpha_beta_prunning_algorithm["name"],
+    #                               "player_2": alpha_zero_uct_policy["name"],
+    #                               "result": result,
+    #                               "note": "Game result is viewed from player_1's perspective."})          
+
+    for alpha_zero_powermean_uct_policy in alpha_zero_powermean_uct_policies:
+        # Player1: AlphaZero with Stochastic PowerMean UCT algorithm | Player2: UCT algorithm
+        result = evaluate_func(player_1=alpha_zero_powermean_uct_policy, player_2=UCT_algorithm, env=env)
+        tournament_result.append({"player_1": alpha_zero_powermean_uct_policy["name"],
+                                  "player_2": UCT_algorithm["name"],
+                                  "result": result,
+                                  "note": "Game result is viewed from player_1's perspective."})
+        
+        # Player1: AlphaZero with Stochastic PowerMean UCT algorithm | Player2: Stochastic PowerMean UCT algorithm
+        result = evaluate_func(player_1=alpha_zero_powermean_uct_policy, player_2=stochastc_powermean_UCT_algorithm, env=env)
+        tournament_result.append({"player_1": alpha_zero_powermean_uct_policy["name"],
+                                  "player_2": stochastc_powermean_UCT_algorithm["name"],
+                                  "result": result,
+                                  "note": "Game result is viewed from player_1's perspective."})
+            
+        # Player1: AlphaZero with Stochastic PowerMean UCT algorithm | Player2: Alpha-Beta prunning algorithm
+        result = evaluate_func(player_1=alpha_zero_powermean_uct_policy, player_2=alpha_beta_prunning_algorithm, env=env)
+        tournament_result.append({"player_1": alpha_zero_powermean_uct_policy["name"],
+                                  "player_2": alpha_beta_prunning_algorithm["name"],
+                                  "result": result,
+                                  "note": "Game result is viewed from player_1's perspective."})        
+
+        # Player1: UCT algorithm | Player2: AlphaZero with Stochastic PowerMean UCT algorithm
+        result = evaluate_func(player_1=UCT_algorithm, player_2=alpha_zero_powermean_uct_policy, env=env)
+        tournament_result.append({"player_1": UCT_algorithm["name"],
+                                  "player_2": alpha_zero_powermean_uct_policy["name"],
+                                  "result": result,
+                                  "note": "Game result is viewed from player_1's perspective."})        
+
+        # Player1: Stochastic PowerMean UCT algorithm | Player2: AlphaZero with Stochastic PowerMean UCT algorithm
+        result = evaluate_func(player_1=stochastc_powermean_UCT_algorithm, player_2=alpha_zero_powermean_uct_policy, env=env)
+        tournament_result.append({"player_1": stochastc_powermean_UCT_algorithm["name"],
+                                  "player_2": alpha_zero_powermean_uct_policy["name"],
+                                  "result": result,
+                                  "note": "Game result is viewed from player_1's perspective."})        
+
+        # Player1: Alpha-Beta prunning algorithm | Player2: AlphaZero with Stochastic PowerMean UCT algorithm
+        result = evaluate_func(player_1=alpha_beta_prunning_algorithm, player_2=alpha_zero_powermean_uct_policy, env=env)
+        tournament_result.append({"player_1": alpha_beta_prunning_algorithm["name"],
+                                  "player_2": alpha_zero_powermean_uct_policy["name"],
+                                  "result": result,
+                                  "note": "Game result is viewed from player_1's perspective."})          
+
+    # Player1: UCT algorithm | Player2: Stochastic PowerMean UCT algorithm
+    result = evaluate_func(player_1=UCT_algorithm, player_2=stochastc_powermean_UCT_algorithm, env=env)
+    tournament_result.append({"player_1": UCT_algorithm["name"],
+                                "player_2": stochastc_powermean_UCT_algorithm["name"],
+                                "result": result,
+                                "note": "Game result is viewed from player_1's perspective."})     
+
+    # Player1: UCT algorithm | Player2: Alpha-Beta prunning algorithm
+    result = evaluate_func(player_1=UCT_algorithm, player_2=alpha_beta_prunning_algorithm, env=env)
+    tournament_result.append({"player_1": UCT_algorithm["name"],
+                                "player_2": alpha_beta_prunning_algorithm["name"],
+                                "result": result,
+                                "note": "Game result is viewed from player_1's perspective."})     
+
+    # Player1: Stochastic PowerMean UCT algorithm | Player2: UCT algorithm
+    result = evaluate_func(player_1=stochastc_powermean_UCT_algorithm, player_2=UCT_algorithm, env=env)
+    tournament_result.append({"player_1": stochastc_powermean_UCT_algorithm["name"],
+                                "player_2": UCT_algorithm["name"],
+                                "result": result,
+                                "note": "Game result is viewed from player_1's perspective."})     
+
+    # Player1: Alpha-Beta prunning algorithm | Player2: UCT algorithm
+    result = evaluate_func(player_1=alpha_beta_prunning_algorithm, player_2=UCT_algorithm, env=env)
+    tournament_result.append({"player_1": alpha_beta_prunning_algorithm["name"],
+                                "player_2": UCT_algorithm["name"],
+                                "result": result,
+                                "note": "Game result is viewed from player_1's perspective."})     
+
+    # Player1: Stochastic PowerMean UCT algorithm | Player2: Alpha-Beta prunning algorithm
+    result = evaluate_func(player_1=stochastc_powermean_UCT_algorithm, player_2=alpha_beta_prunning_algorithm, env=env)
+    tournament_result.append({"player_1": stochastc_powermean_UCT_algorithm["name"],
+                                "player_2": alpha_beta_prunning_algorithm["name"],
+                                "result": result,
+                                "note": "Game result is viewed from player_1's perspective."})     
+
+    # Player1: Alpha-Beta prunning algorithm | Player2: Stochastic PowerMean UCT algorithm
+    result = evaluate_func(player_1=alpha_beta_prunning_algorithm, player_2=stochastc_powermean_UCT_algorithm, env=env)
+    tournament_result.append({"player_1": alpha_beta_prunning_algorithm["name"],
+                                "player_2": stochastc_powermean_UCT_algorithm["name"],
+                                "result": result,
+                                "note": "Game result is viewed from player_1's perspective."})     
+
+    with open("tournament_result.json", "w") as f:
+        json.dump(tournament_result, f, indent=4) 
