@@ -126,7 +126,7 @@ def config_alpha_beta_prunning():
 def config_tree():
     tree_config=dict(
         # (int) The number of simulations to perform at each move.
-        num_simulations=100,
+        num_simulations=1000,
         # (int) The maximum number of moves to make in a game.
         max_moves=512,  # for chess and shogi, 722 for Go.
         # (float) The alpha value used in the Dirichlet distribution for exploration at the root node of the search tree.
@@ -149,7 +149,7 @@ def mock_policy_value_func(env):
         action_probs_dict[action] = 1.0
 
     # Get roll-out value
-    num_rollout = 200
+    num_rollout = 20
 
     # Get environment observation
     action_mask = np.zeros(env.total_num_actions, 'int8')
@@ -179,11 +179,13 @@ def mock_policy_value_func(env):
         if (winner == -1):
             leaf_value = 0
         else:
-            leaf_value = -1 if state_config_for_env_reset.get('start_player_index') == winner else 1
+            leaf_value = 1 if (state_config_for_env_reset.get('start_player_index') + 1) == winner else -1
+            
+            # Because the leaf value is viewed from the perspective of the player who starts the game, we need to invert it
+            leaf_value = -leaf_value
         total_reward += leaf_value
     # Average the total reward over the number of rollouts
     avr_reward = total_reward / num_rollout 
-    
     # Reset the evironment
     env.reset(
         start_player_index=state_config_for_env_reset.get('start_player_index'),

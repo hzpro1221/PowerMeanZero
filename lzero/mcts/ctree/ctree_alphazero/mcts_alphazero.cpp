@@ -116,20 +116,27 @@ class MCTS {
         std::shared_ptr<Node> V_sh_plus_1 = nullptr;
         std::shared_ptr<Node> Q_sh_a = nullptr;
         double best_score = -9999999;
+        int policy_func_called = 0;
+
+        py::tuple result;
+        std::map<int, double> action_probs_dict;
+        double leaf_value;
+        py::list legal_actions_list;
+        std::vector<int> legal_actions;
 
         // If opp_mov has not been explored yet
         if (std::find(Q_sh->opp_mov.begin(), Q_sh->opp_mov.end(), opp_mov) == Q_sh->opp_mov.end()) {
-            std::map<int, double> action_probs_dict;
-            double leaf_value;
-
             // Get action probabilities and leaf value from the policy-value function
-            py::tuple result = policy_value_func(simulate_env);
+            result = policy_value_func(simulate_env);
             action_probs_dict = result[0].cast<std::map<int, double>>();
             leaf_value = result[1].cast<double>();                
 
             // Extract legal actions from the simulation environment
-            py::list legal_actions_list = simulate_env.attr("legal_actions").cast<py::list>();
-            std::vector<int> legal_actions = legal_actions_list.cast<std::vector<int>>();
+            legal_actions_list = simulate_env.attr("legal_actions").cast<py::list>();
+            legal_actions = legal_actions_list.cast<std::vector<int>>();
+            
+            // Mark as policy function called 
+            policy_func_called = 1;
             
             for (const auto& kv : action_probs_dict) {
                 int action = kv.first;
@@ -152,11 +159,10 @@ class MCTS {
 
             // Mark opp_mov as explored
             Q_sh->opp_mov.push_back(opp_mov);            
-        }
-        
-        // Retrieve legal actions from the simulation environment
-        py::list legal_actions_list = simulate_env.attr("legal_actions").cast<py::list>();
-        std::vector<int> legal_actions = legal_actions_list.cast<std::vector<int>>();
+        }        
+
+        legal_actions_list = simulate_env.attr("legal_actions").cast<py::list>();
+        legal_actions = legal_actions_list.cast<std::vector<int>>();
 
         // For each legal action, check if it has not been expanded yet
         for (size_t i = 0; i < legal_actions.size(); ++i) {
@@ -164,11 +170,15 @@ class MCTS {
 
             // If the action has not been expanded, initialize its child nodes
             if (Q_sh->children.find(action) == Q_sh->children.end()) {
+                if (policy_func_called == 0) {
+                    // Get action probabilities and leaf value from the policy-value function
+                    result = policy_value_func(simulate_env);
+                    action_probs_dict = result[0].cast<std::map<int, double>>();
+                    leaf_value = result[1].cast<double>();
 
-                // Get action probabilities and leaf value from the policy-value function
-                py::tuple result = policy_value_func(simulate_env);
-                std::map<int, double> action_probs_dict = result[0].cast<std::map<int, double>>();
-                double leaf_value = result[1].cast<double>();
+                    // Mark as policy function called 
+                    policy_func_called = 1;                            
+                }
 
                 // Create new child nodes for both V and Q trees
                 V_sh->children[action] = std::make_shared<Node>(V_sh);
@@ -184,18 +194,19 @@ class MCTS {
             int action_tmp = kv.first;
             std::shared_ptr<Node> Q_sh_a_tmp = kv.second;
 
-            // Retrieve legal actions from the simulation environment
-            py::list legal_actions_list = simulate_env.attr("legal_actions").cast<py::list>();
-            std::vector<int> legal_actions = legal_actions_list.cast<std::vector<int>>();
-
             // Check if the current action is legal before proceeding
             if (std::find(legal_actions.begin(), legal_actions.end(), action_tmp) != legal_actions.end()) {
-
                 // If prior probability for the current opponent move is uninitialized, initialize it
                 if (Q_sh_a_tmp->prior_p[opp_mov] == 0) {
-                    py::tuple result = policy_value_func(simulate_env);
-                    std::map<int, double> action_probs_dict = result[0].cast<std::map<int, double>>();
-                    double leaf_value = result[1].cast<double>();
+                    if (policy_func_called == 0) {
+                        // Get action probabilities and leaf value from the policy-value function
+                        result = policy_value_func(simulate_env);
+                        action_probs_dict = result[0].cast<std::map<int, double>>();
+                        leaf_value = result[1].cast<double>();
+    
+                        // Mark as policy function called 
+                        policy_func_called = 1;                            
+                    }
 
                     // Assign prior probability if available
                     if (action_probs_dict.find(action_tmp) != action_probs_dict.end()) {
@@ -289,6 +300,7 @@ class MCTS {
         double leaf_value = _expand_leaf_node(-1, V_root, Q_root, simulate_env, policy_value_func);
         V_root->visit_count++;
         V_root->value = leaf_value;
+        V_root->flag = -1;
 
         // Add Dirichlet noise to encourage exploration if sampling
         if (sample) {
@@ -297,11 +309,11 @@ class MCTS {
         }
 
         // Get legal actions
-        py::list legal_actions_py = simulate_env.attr("legal_actions").cast<py::list>();
-        std::vector<int> legal_actions;
-        for (py::handle h : legal_actions_py) {
-            legal_actions.push_back(h.cast<int>());
-        }
+        // py::list legal_actions_py = simulate_env.attr("legal_actions").cast<py::list>();
+        // std::vector<int> legal_actions;
+        // for (py::handle h : legal_actions_py) {
+        //     legal_actions.push_back(h.cast<int>());
+        // }
 
         // Perform multiple MCTS simulations
         for (int n = 0; n < num_simulations; ++n) {
@@ -352,10 +364,6 @@ class MCTS {
             action_selected = actions[std::distance(action_probs.begin(), std::max_element(action_probs.begin(), action_probs.end()))];
         }
 
-        // py::print("action_probs:", action_probs);
-        // py::print("V_root->visit_count:", V_root->visit_count);
-        // py::print("action_selected:", action_selected, "\n");
-
         return std::make_tuple(action_selected, action_probs, Q_root);
     }
 
@@ -396,6 +404,7 @@ class MCTS {
     double _simulateQ(int opp_mov, int action, std::shared_ptr<Node> V_sh_plus_1, std::shared_ptr<Node> Q_sh_a, 
                     std::shared_ptr<Node> V_sh_2, std::shared_ptr<Node> Q_sh_2, 
                     py::object simulate_env, py::object policy_value_func) {
+        
         // Apply the chosen action in the environment
         simulate_env.attr("step")(action);
 
