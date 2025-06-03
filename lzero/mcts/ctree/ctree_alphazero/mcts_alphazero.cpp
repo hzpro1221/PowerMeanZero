@@ -428,9 +428,8 @@ class MCTS {
                 V_sh_plus_1->value = leaf_value;
                 V_sh_plus_1->flag = 3;
 
-                // Update alternate node V_sh_2 with negated value
+                // Update visitation through V_sh_2
                 V_sh_2->visit_count++;
-                V_sh_2->value = 1.0 - leaf_value;
                 V_sh_2->flag = -1;
             } else {
                 // Continue simulating from the next V-node (opponent's turn)
@@ -459,12 +458,14 @@ class MCTS {
             // Rescale leaf_value to [0,1]
             leaf_value = std::max(0.0, (leaf_value + 1) / 2.0);
 
-            // Update terminal node statistics
+            // Update terminal node statistics and visit count 
+            if (V_sh_plus_1->visit_count == 0) {
+                V_sh_plus_1->value = leaf_value;
+            }
             V_sh_plus_1->visit_count++;
-            V_sh_plus_1->value = leaf_value;
 
+            // Update the visit count through V_sh_2
             V_sh_2->visit_count++;
-            V_sh_2->value = 1.0 - leaf_value;
         }
 
         // Update Q-node value as a running average incorporating leaf value and discounted V-node value
