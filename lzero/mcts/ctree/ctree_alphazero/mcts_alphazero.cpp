@@ -39,9 +39,9 @@ class MCTS {
          double root_dirichlet_alpha=0.3, 
          double root_noise_weight=0.25, 
          py::object simulate_env=py::none(),
-         double c=2.5,
-         double p=3,
-         double gamma=0.95)
+         double c=1.14,
+         double p=2,
+         double gamma=0.99)
         : max_moves(max_moves), num_simulations(num_simulations),
           pb_c_base(pb_c_base), pb_c_init(pb_c_init),
           root_dirichlet_alpha(root_dirichlet_alpha),

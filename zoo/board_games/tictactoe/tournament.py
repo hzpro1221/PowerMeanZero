@@ -126,7 +126,7 @@ def config_alpha_beta_prunning():
 def config_tree():
     tree_config=dict(
         # (int) The number of simulations to perform at each move.
-        num_simulations=1000,
+        num_simulations=200,
         # (int) The maximum number of moves to make in a game.
         max_moves=512,  # for chess and shogi, 722 for Go.
         # (float) The alpha value used in the Dirichlet distribution for exploration at the root node of the search tree.
@@ -149,7 +149,7 @@ def mock_policy_value_func(env):
         action_probs_dict[action] = 1.0
 
     # Get roll-out value
-    num_rollout = 20
+    num_rollout = 50
 
     # Get environment observation
     action_mask = np.zeros(env.total_num_actions, 'int8')
