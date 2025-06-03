@@ -459,7 +459,7 @@ class MCTS {
             leaf_value = std::max(0.0, (leaf_value + 1) / 2.0);
 
             // Update terminal node statistics and visit count 
-            if (V_sh_plus_1->visit_count == 0) {
+            if (V_sh_plus_1->is_leaf()) {
                 V_sh_plus_1->value = leaf_value;
             }
             V_sh_plus_1->visit_count++;
