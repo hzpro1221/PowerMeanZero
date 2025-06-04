@@ -112,14 +112,6 @@ class MCTS {
 
     // Select the best child node based on UCB score
     std::tuple<int, std::shared_ptr<Node>, std::shared_ptr<Node>> _select_child(int opp_mov, std::shared_ptr<Node> V_sh, std::shared_ptr<Node> Q_sh, py::object simulate_env, py::object policy_value_func) {
-        py::print("\nSelect child with opp_mov: ", opp_mov);
-        py::print("Before selecting child");
-        for (const auto& kv : Q_sh->children) {
-            int action_tmp = kv.first;
-            std::shared_ptr<Node> Q_sh_a_tmp = kv.second;
-            py::print("Action: ", action_tmp, " Prior P: ", Q_sh_a_tmp->prior_p[opp_mov], " Init Reward: ", Q_sh_a_tmp->init_reward);
-        }
-        
         int action = -1;
         std::shared_ptr<Node> V_sh_plus_1 = nullptr;
         std::shared_ptr<Node> Q_sh_a = nullptr;
@@ -145,7 +137,16 @@ class MCTS {
             
             // Mark as policy function called 
             policy_func_called = 1;
-            
+            py::print("If opp_mov has not been explored yet");
+            py::print("\nSelect child with opp_mov: ", opp_mov);
+            py::print("V_sh->visit_count", V_sh->visit_count);
+            py::print("Before selecting child");
+            for (const auto& kv : Q_sh->children) {
+                int action_tmp = kv.first;
+                std::shared_ptr<Node> Q_sh_a_tmp = kv.second;
+                py::print("Action: ", action_tmp, " Prior P: ", Q_sh_a_tmp->prior_p[opp_mov], " Init Reward: ", Q_sh_a_tmp->init_reward);
+            }
+
             for (const auto& kv : action_probs_dict) {
                 int action = kv.first;
                 double prior_p = kv.second;
@@ -175,10 +176,21 @@ class MCTS {
         // For each legal action, check if it has not been expanded yet
         for (size_t i = 0; i < legal_actions.size(); ++i) {
             int action = legal_actions[i];
-
+            
             // If the action has not been expanded, initialize its child nodes
             if (Q_sh->children.find(action) == Q_sh->children.end()) {
                 if (policy_func_called == 0) {
+                    py::print("For each legal action, check if it has not been expanded yet");
+                    py::print("V_sh->visit_count", V_sh->visit_count);
+                    py::print("Q_sh->visit_count", Q_sh->visit_count);
+                    py::print("\nSelect child with opp_mov: ", opp_mov);
+                    py::print("Before selecting child");
+                    for (const auto& kv : Q_sh->children) {
+                        int action_tmp = kv.first;
+                        std::shared_ptr<Node> Q_sh_a_tmp = kv.second;
+                        py::print("Action: ", action_tmp, " Prior P: ", Q_sh_a_tmp->prior_p);
+                    }
+                                        
                     // Get action probabilities and leaf value from the policy-value function
                     result = policy_value_func(simulate_env);
                     action_probs_dict = result[0].cast<std::map<int, double>>();
@@ -207,6 +219,17 @@ class MCTS {
                 // If prior probability for the current opponent move is uninitialized, initialize it
                 if (Q_sh_a_tmp->prior_p[opp_mov] == 0) {
                     if (policy_func_called == 0) {
+                        py::print("V_sh->visit_count", V_sh->visit_count);
+                        py::print("Q_sh->visit_count", Q_sh->visit_count);
+                        py::print("Check if the current action is legal before proceeding");
+                        py::print("\nSelect child with opp_mov: ", opp_mov);
+                        py::print("Before selecting child");
+                        for (const auto& kv : Q_sh->children) {
+                            int action_tmp = kv.first;
+                            std::shared_ptr<Node> Q_sh_a_tmp = kv.second;
+                            py::print("Action: ", action_tmp, " Prior P: ", Q_sh_a_tmp->prior_p);
+                        }
+                                    
                         // Get action probabilities and leaf value from the policy-value function
                         result = policy_value_func(simulate_env);
                         action_probs_dict = result[0].cast<std::map<int, double>>();
@@ -243,14 +266,18 @@ class MCTS {
             Q_sh_a = Q_sh;
         }
 
-        py::print("action_probs_dict: ", action_probs_dict);
-        py::print("After selecting child");
-        for (const auto& kv : Q_sh->children) {
-            int action_tmp = kv.first;
-            std::shared_ptr<Node> Q_sh_a_tmp = kv.second;
-            py::print("Action: ", action_tmp, " Prior P: ", Q_sh_a_tmp->prior_p[opp_mov], " Init Reward: ", Q_sh_a_tmp->init_reward);
+        if (policy_func_called == 1) {
+            py::print("action_probs_dict: ", action_probs_dict);
+            py::print("V_sh->visit_count", V_sh->visit_count);
+            py::print("Q_sh->visit_count", Q_sh->visit_count);
+            py::print("After selecting child");
+            for (const auto& kv : Q_sh->children) {
+                int action_tmp = kv.first;
+                std::shared_ptr<Node> Q_sh_a_tmp = kv.second;
+                py::print("Action: ", action_tmp, " Prior P: ", Q_sh_a_tmp->prior_p);
+            }
+            py::print("action_selected:", action);
         }
-
         return std::make_tuple(action, V_sh_plus_1, Q_sh_a);
     }
 
@@ -259,11 +286,11 @@ class MCTS {
         std::map<int, double> action_probs_dict;
         double leaf_value;
         py::print("\nExpanding leaf node with opp_mov: ", opp_mov);
-        py::print("action_probs_dict: ", action_probs_dict);
         // Query the policy-value function to obtain action probabilities and a leaf value estimate
         py::tuple result = policy_value_func(simulate_env);
         action_probs_dict = result[0].cast<std::map<int, double>>();
         leaf_value = result[1].cast<double>();
+        py::print("action_probs_dict: ", action_probs_dict);
 
         // Retrieve legal actions from the simulation environment
         py::list legal_actions_list = simulate_env.attr("legal_actions").cast<py::list>();
@@ -291,7 +318,7 @@ class MCTS {
         for (const auto& kv : Q_sh->children) {
             int action_tmp = kv.first;
             std::shared_ptr<Node> Q_sh_a_tmp = kv.second;
-            py::print("Action: ", action_tmp, " Prior P: ", Q_sh_a_tmp->prior_p[opp_mov], " Init Reward: ", Q_sh_a_tmp->init_reward);
+            py::print("Action: ", action_tmp, " Prior P: ", Q_sh_a_tmp->prior_p);
         }
         return leaf_value;
     }
@@ -333,11 +360,11 @@ class MCTS {
         }
 
         // Get legal actions
-        // py::list legal_actions_py = simulate_env.attr("legal_actions").cast<py::list>();
-        // std::vector<int> legal_actions;
-        // for (py::handle h : legal_actions_py) {
-        //     legal_actions.push_back(h.cast<int>());
-        // }
+        py::list legal_actions_py = simulate_env.attr("legal_actions").cast<py::list>();
+        std::vector<int> legal_actions;
+        for (py::handle h : legal_actions_py) {
+            legal_actions.push_back(h.cast<int>());
+        }
 
         // Perform multiple MCTS simulations
         for (int n = 0; n < num_simulations; ++n) {
@@ -397,6 +424,16 @@ class MCTS {
     double _simulateV(int opp_mov, std::shared_ptr<Node> V_sh, std::shared_ptr<Node> Q_sh, 
                     std::shared_ptr<Node> V_sh_2, std::shared_ptr<Node> Q_sh_2, 
                     py::object simulate_env, py::object policy_value_func) {
+        // Check if the current V-node is a leaf node
+        if (V_sh->is_leaf()) {
+            // If leaf, expand it and get its value estimate
+            double leaf_value = _expand_leaf_node(opp_mov, V_sh, Q_sh, simulate_env, policy_value_func);
+            V_sh->visit_count++;
+            V_sh->value = leaf_value;
+            V_sh->flag = -1;  // Mark as expanded
+            return leaf_value;
+        }
+
         // Select the best child action and associated nodes based on the current state
         int action;
         std::shared_ptr<Node> V_sh_plus_1;
