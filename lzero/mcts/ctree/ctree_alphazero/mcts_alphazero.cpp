@@ -112,6 +112,14 @@ class MCTS {
 
     // Select the best child node based on UCB score
     std::tuple<int, std::shared_ptr<Node>, std::shared_ptr<Node>> _select_child(int opp_mov, std::shared_ptr<Node> V_sh, std::shared_ptr<Node> Q_sh, py::object simulate_env, py::object policy_value_func) {
+        py::print("\nSelect child with opp_mov: ", opp_mov);
+        py::print("Before selecting child");
+        for (const auto& kv : Q_sh->children) {
+            int action_tmp = kv.first;
+            std::shared_ptr<Node> Q_sh_a_tmp = kv.second;
+            py::print("Action: ", action_tmp, " Prior P: ", Q_sh_a_tmp->prior_p[opp_mov], " Init Reward: ", Q_sh_a_tmp->init_reward);
+        }
+        
         int action = -1;
         std::shared_ptr<Node> V_sh_plus_1 = nullptr;
         std::shared_ptr<Node> Q_sh_a = nullptr;
@@ -235,6 +243,14 @@ class MCTS {
             Q_sh_a = Q_sh;
         }
 
+        py::print("action_probs_dict: ", action_probs_dict);
+        py::print("After selecting child");
+        for (const auto& kv : Q_sh->children) {
+            int action_tmp = kv.first;
+            std::shared_ptr<Node> Q_sh_a_tmp = kv.second;
+            py::print("Action: ", action_tmp, " Prior P: ", Q_sh_a_tmp->prior_p[opp_mov], " Init Reward: ", Q_sh_a_tmp->init_reward);
+        }
+
         return std::make_tuple(action, V_sh_plus_1, Q_sh_a);
     }
 
@@ -242,7 +258,8 @@ class MCTS {
     double _expand_leaf_node(int opp_mov, std::shared_ptr<Node> V_sh, std::shared_ptr<Node> Q_sh, py::object simulate_env, py::object policy_value_func) {
         std::map<int, double> action_probs_dict;
         double leaf_value;
-
+        py::print("\nExpanding leaf node with opp_mov: ", opp_mov);
+        py::print("action_probs_dict: ", action_probs_dict);
         // Query the policy-value function to obtain action probabilities and a leaf value estimate
         py::tuple result = policy_value_func(simulate_env);
         action_probs_dict = result[0].cast<std::map<int, double>>();
@@ -269,6 +286,13 @@ class MCTS {
         // Record the opponent move and initialize the reward estimate for the current node
         Q_sh->opp_mov.push_back(opp_mov);
         Q_sh->init_reward = leaf_value;
+        
+        py::print("After expanding leaf node");
+        for (const auto& kv : Q_sh->children) {
+            int action_tmp = kv.first;
+            std::shared_ptr<Node> Q_sh_a_tmp = kv.second;
+            py::print("Action: ", action_tmp, " Prior P: ", Q_sh_a_tmp->prior_p[opp_mov], " Init Reward: ", Q_sh_a_tmp->init_reward);
+        }
         return leaf_value;
     }
 
@@ -328,13 +352,13 @@ class MCTS {
             _simulateV(-1, V_root, Q_root, V_root_2, Q_root_2, simulate_env, policy_value_func);
 
             // Export both trees to PNG via Graphviz
-            // exportToDot(-1, "/content/tree_player_1.dot", V_root, Q_root);
-            // std::string command = "dot -Tpng -Gdpi=300 /content/tree_player_1.dot -o /content/log_v2/tree_player_1_tree_legal_ac_len_" + std::to_string(legal_actions.size()) + "_num_sti_" + std::to_string(n) + ".png";
-            // std::system(command.c_str());        
+            exportToDot(-1, "/content/tree_player_1.dot", V_root, Q_root);
+            std::string command = "dot -Tpng -Gdpi=300 /content/tree_player_1.dot -o /content/log_v2/tree_player_1_tree_legal_ac_len_" + std::to_string(legal_actions.size()) + "_num_sti_" + std::to_string(n) + ".png";
+            std::system(command.c_str());        
 
-            // exportToDot(-1, "/content/tree_player_2.dot", V_root_2, Q_root_2);
-            // std::string command2 = "dot -Tpng -Gdpi=300 /content/tree_player_2.dot -o /content/log_v2/tree_player_2_tree_legal_ac_len_" + std::to_string(legal_actions.size()) + "_num_sti_" + std::to_string(n) + ".png";
-            // std::system(command2.c_str());                    
+            exportToDot(-1, "/content/tree_player_2.dot", V_root_2, Q_root_2);
+            std::string command2 = "dot -Tpng -Gdpi=300 /content/tree_player_2.dot -o /content/log_v2/tree_player_2_tree_legal_ac_len_" + std::to_string(legal_actions.size()) + "_num_sti_" + std::to_string(n) + ".png";
+            std::system(command2.c_str());                    
         }
 
         // Visualization for tic-tac-toe
@@ -427,10 +451,6 @@ class MCTS {
                 V_sh_plus_1->visit_count++;
                 V_sh_plus_1->value = leaf_value;
                 V_sh_plus_1->flag = 3;
-
-                // Update visitation through V_sh_2
-                V_sh_2->visit_count++;
-                V_sh_2->flag = -1;
             } else {
                 // Continue simulating from the next V-node (opponent's turn)
                 leaf_value = 1.0 - _simulateV(action, V_sh_2, Q_sh_2, V_sh_plus_1, Q_sh_a, simulate_env, policy_value_func);
@@ -457,15 +477,6 @@ class MCTS {
 
             // Rescale leaf_value to [0,1]
             leaf_value = std::max(0.0, (leaf_value + 1) / 2.0);
-
-            // Update terminal node statistics and visit count 
-            if (V_sh_plus_1->is_leaf()) {
-                V_sh_plus_1->value = leaf_value;
-            }
-            V_sh_plus_1->visit_count++;
-
-            // Update the visit count through V_sh_2
-            V_sh_2->visit_count++;
         }
 
         // Update Q-node value as a running average incorporating leaf value and discounted V-node value
@@ -541,9 +552,9 @@ class MCTS {
                 nodeToId[V_sh_plus_1] = nextId++;
             }
 
-            if (V_sh_plus_1->is_leaf() && (V_sh_plus_1->visit_count == 0)) {
-                continue;
-            }
+            // if (V_sh_plus_1->is_leaf() && (V_sh_plus_1->visit_count == 0)) {
+            //     continue;
+            // }
 
             int childId = nodeToId[V_sh_plus_1];
 
