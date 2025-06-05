@@ -9,7 +9,7 @@ import numpy as np
 import copy
 import json
 
-def config_policy_env():
+def config_policy_env(name):
     # ==============================================================
     # begin of the most frequently changed config specified by the user
     # ==============================================================
@@ -20,7 +20,10 @@ def config_policy_env():
     update_per_collect = 50
     batch_size = 256
     max_env_step = 20000
-    mcts_ctree = True
+    if (name == "UCT"):
+        mcts_ctree = False
+    elif (name == "Stochastic PowerMean UCT"):
+        mcts_ctree = True
     # ==============================================================
     # end of the most frequently changed config specified by the user
     # ==============================================================
@@ -311,14 +314,17 @@ if __name__ == "__main__":
     ]  
 
     # Prepare config for policy and environment
-    cfg, create_cfg = config_policy_env()
-    cfg = compile_config(cfg, seed=0, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
+    cfg_uct, create_cfg_uct = config_policy_env(name="UCT")
+    cfg_powermean_uct, create_cfg_powermean_uct = config_policy_env(name="Stochastic PowerMean UCT")
+
+    cfg_uct = compile_config(cfg_uct, seed=0, env=None, auto=True, create_cfg=create_cfg_uct, save_cfg=True)
+    cfg_powermean_uct = compile_config(cfg_powermean_uct, seed=0, env=None, auto=True, create_cfg=create_cfg_powermean_uct, save_cfg=True)
 
     # Load policy for AlphaZero with UCT algorithm
     alpha_zero_uct_policies = []
     for checkpoint_path in alpha_zero_uct_path:
-        policy = create_policy(cfg.policy, model=None, enable_field=['learn', 'collect', 'eval'])
-        policy.learn_mode.load_state_dict(torch.load(checkpoint_path, map_location=cfg.policy.device))
+        policy = create_policy(cfg_uct.policy, model=None, enable_field=['learn', 'collect', 'eval'])
+        policy.learn_mode.load_state_dict(torch.load(checkpoint_path, map_location=cfg_uct.policy.device))
         alpha_zero_uct_policies.append({"name": f"AlphaZero with UCT algorithm: {checkpoint_path}",
                                         "policy": policy,
                                         "forward_func": policy_forward_func})
@@ -326,8 +332,8 @@ if __name__ == "__main__":
     # Load policy for AlphaZero with Stochastic PowerMean UCT algorithm
     alpha_zero_powermean_uct_policies = []
     for checkpoint_path in alpha_zero_powermean_uct_path:
-        policy = create_policy(cfg.policy, model=None, enable_field=['learn', 'collect', 'eval'])
-        policy.learn_mode.load_state_dict(torch.load(checkpoint_path, map_location=cfg.policy.device))
+        policy = create_policy(cfg_powermean_uct.policy, model=None, enable_field=['learn', 'collect', 'eval'])
+        policy.learn_mode.load_state_dict(torch.load(checkpoint_path, map_location=cfg_powermean_uct.policy.device))
         alpha_zero_powermean_uct_policies.append({"name": f"AlphaZero with Stochastic PowerMean UCT algorithm: {checkpoint_path}",
                                                   "policy": policy,
                                                   "forward_func": policy_forward_func})
