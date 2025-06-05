@@ -382,7 +382,11 @@ class MCTS {
             double leaf_value = _expand_leaf_node(opp_mov, V_sh, Q_sh, simulate_env, policy_value_func);
             V_sh->visit_count++;
             V_sh->value = leaf_value;
-            V_sh->flag = -1;  // Mark as expanded
+            V_sh->flag = 3;  // Mark as expanded
+
+            // Update Q-node value as a running average incorporating leaf value and discounted V-node value
+            Q_sh_a->value = (Q_sh_a->value * Q_sh_a->visit_count + leaf_value + gamma * V_sh_plus_1->value) / (Q_sh_a->visit_count + 1);
+            Q_sh_a->visit_count++;
             return leaf_value;
         }
 
