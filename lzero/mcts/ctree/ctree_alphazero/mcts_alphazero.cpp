@@ -380,6 +380,10 @@ class MCTS {
         if (V_sh->is_leaf()) {
             // If leaf, expand it and get its value estimate
             double leaf_value = _expand_leaf_node(opp_mov, V_sh, Q_sh, simulate_env, policy_value_func);
+
+            // Rescale leaf_value to [0,1]
+            leaf_value = std::max(0.0, (leaf_value + 1) / 2.0);
+
             V_sh->visit_count++;
             V_sh->value = leaf_value;
             V_sh->flag = 3;  // Mark as expanded
