@@ -319,7 +319,6 @@ class MCTS {
 
         // Perform multiple MCTS simulations
         for (int n = 0; n < num_simulations; ++n) {
-            py::print("Simulation number:", n + 1, "of", num_simulations);
             simulate_env.attr("reset")(
                 state_config_for_env_reset["start_player_index"].cast<int>(),
                 init_state,
@@ -383,12 +382,20 @@ class MCTS {
 
             // Rescale leaf_value to [0,1]
             leaf_value = std::max(0.0, (leaf_value + 1) / 2.0);
+            
+            // VERSION 1: ADDING MORE REWARD FOR BEING WIN/DRAW
+            if (leaf_value >= 0.5) {
+                leaf_value += 0.3; // Add bonus for winning or drawing
+            }            
 
             V_sh->visit_count++;
             V_sh->value = leaf_value;
             V_sh->flag = 3;  // Mark as expanded
 
             // Update Q-node value as a running average incorporating leaf value and discounted V-node value
+            // VERSION 2: ADDING BUFFER FOR Q_VALUE, KEEP THE REWARD SCALE INTACT
+            // int buffer = static_cast<int>(std::round((pow(gamma, num_simulations + 1) - 1) / (gamma - 1)));
+            // Q_sh_a->value = ((Q_sh_a->value - buffer) * Q_sh_a->visit_count + leaf_value + gamma * V_sh_plus_1->value) / (Q_sh_a->visit_count + 1) + buffer;                        
             Q_sh_a->value = (Q_sh_a->value * Q_sh_a->visit_count + leaf_value + gamma * V_sh_plus_1->value) / (Q_sh_a->visit_count + 1);
             Q_sh_a->visit_count++;
             return leaf_value;
@@ -444,6 +451,11 @@ class MCTS {
                 // Rescale leaf_value to [0,1]
                 leaf_value = std::max(0.0, (leaf_value + 1) / 2.0);
 
+                // VERSION 1: ADDING MORE REWARD FOR BEING WIN/DRAW
+                if (leaf_value >= 0.5) {
+                    leaf_value += 0.3; // Add bonus for winning or drawing
+                } 
+
                 // Update V_sh_plus_1 node statistics
                 V_sh_plus_1->visit_count++;
                 V_sh_plus_1->value = leaf_value;
@@ -474,10 +486,20 @@ class MCTS {
 
             // Rescale leaf_value to [0,1]
             leaf_value = std::max(0.0, (leaf_value + 1) / 2.0);
+
+            // VERSION 1: ADDING MORE REWARD FOR BEING WIN/DRAW
+            if (leaf_value >= 0.5) {
+                leaf_value += 0.3; // Add bonus for winning or drawing
+            }            
         }
 
         // Update Q-node value as a running average incorporating leaf value and discounted V-node value
-        Q_sh_a->value = (Q_sh_a->value * Q_sh_a->visit_count + leaf_value + gamma * V_sh_plus_1->value) / (Q_sh_a->visit_count + 1);
+
+        // VERSION 2: ADDING BUFFER FOR Q_VALUE, KEEP THE REWARD SCALE INTACT
+        // int buffer = static_cast<int>(std::round((pow(gamma, num_simulations + 1) - 1) / (gamma - 1)));
+        // Q_sh_a->value = ((Q_sh_a->value - buffer) * Q_sh_a->visit_count + leaf_value + gamma * V_sh_plus_1->value) / (Q_sh_a->visit_count + 1) + buffer;        
+        
+        Q_sh_a->value = ((Q_sh_a->value) * Q_sh_a->visit_count + leaf_value + gamma * V_sh_plus_1->value) / (Q_sh_a->visit_count + 1);
         Q_sh_a->visit_count++;
 
         return leaf_value;
