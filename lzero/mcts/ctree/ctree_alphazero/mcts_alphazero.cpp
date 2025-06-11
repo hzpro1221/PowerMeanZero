@@ -385,7 +385,7 @@ class MCTS {
             
             // VERSION 1: ADDING MORE REWARD FOR BEING WIN/DRAW
             if (leaf_value >= 0.5) {
-                leaf_value += 0.3; // Add bonus for winning or drawing
+                leaf_value += 0.15; // Add bonus for winning or drawing
             }            
 
             V_sh->visit_count++;
@@ -395,9 +395,9 @@ class MCTS {
             // Update Q-node value as a running average incorporating leaf value and discounted V-node value
             // VERSION 2: ADDING BUFFER FOR Q_VALUE, KEEP THE REWARD SCALE INTACT
             // int buffer = static_cast<int>(std::round((pow(gamma, num_simulations + 1) - 1) / (gamma - 1)));
-            // Q_sh_a->value = ((Q_sh_a->value - buffer) * Q_sh_a->visit_count + leaf_value + gamma * V_sh_plus_1->value) / (Q_sh_a->visit_count + 1) + buffer;                        
-            Q_sh_a->value = (Q_sh_a->value * Q_sh_a->visit_count + leaf_value + gamma * V_sh_plus_1->value) / (Q_sh_a->visit_count + 1);
-            Q_sh_a->visit_count++;
+            // Q_sh->value = ((Q_sh->value - buffer) * Q_sh->visit_count + leaf_value + gamma * V_sh->value) / (Q_sh->visit_count + 1) + buffer;                        
+            Q_sh->value = (Q_sh->value * Q_sh->visit_count + leaf_value + gamma * V_sh->value) / (Q_sh->visit_count + 1);
+            Q_sh->visit_count++;
             return leaf_value;
         }
 
@@ -453,7 +453,7 @@ class MCTS {
 
                 // VERSION 1: ADDING MORE REWARD FOR BEING WIN/DRAW
                 if (leaf_value >= 0.5) {
-                    leaf_value += 0.3; // Add bonus for winning or drawing
+                    leaf_value += 0.15; // Add bonus for winning or drawing
                 } 
 
                 // Update V_sh_plus_1 node statistics
@@ -462,7 +462,16 @@ class MCTS {
                 V_sh_plus_1->flag = 3;
             } else {
                 // Continue simulating from the next V-node (opponent's turn)
+                // VERSION 1: ADDING MORE REWARD FOR BEING WIN/DRAW
+                if (leaf_value >= 0.65) {
+                    leaf_value -= 0.15; 
+                }
                 leaf_value = 1.0 - _simulateV(action, V_sh_2, Q_sh_2, V_sh_plus_1, Q_sh_a, simulate_env, policy_value_func);
+
+                if (leaf_value >= 0.5) {
+                    leaf_value += 0.15
+                }
+
                 V_sh_plus_1->flag = -1;
             }
         } else {
@@ -489,7 +498,7 @@ class MCTS {
 
             // VERSION 1: ADDING MORE REWARD FOR BEING WIN/DRAW
             if (leaf_value >= 0.5) {
-                leaf_value += 0.3; // Add bonus for winning or drawing
+                leaf_value += 0.15; // Add bonus for winning or drawing
             }            
         }
 
