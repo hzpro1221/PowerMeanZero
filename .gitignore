@@ -1453,6 +1453,9 @@ events.*
 !lzero/mcts/ctree/ctree_alphazero/2-mcts.cpp
 !lzero/mcts/ctree/ctree_alphazero/2-node.cpp
 !lzero/mcts/ctree/ctree_alphazero/2-node.h
+!lzero/mcts/ctree/ctree_alphazero/4-mcts.cpp
+!lzero/mcts/ctree/ctree_alphazero/4-node.cpp
+!lzero/mcts/ctree/ctree_alphazero/4-node.h
 
 **/tb/*
 **/mcts/ctree/tests_cpp/*
