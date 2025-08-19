@@ -89,7 +89,7 @@ class MuZeroPolicy(Policy):
         # (bool) Whether to enable the gumbel-based algorithm (e.g. Gumbel Muzero)
         gumbel_algo=False,
         # (bool) Whether to use C++ MCTS in policy. If False, use Python implementation.
-        mcts_ctree=True,
+        mcts_ctree=False,
         # (bool) Whether to use cuda for network.
         cuda=True,
         # (int) The number of environments used in collecting data.
